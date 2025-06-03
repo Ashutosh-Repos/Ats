@@ -14,18 +14,27 @@ export async function parseResumes(
     const ext = path.extname(filename).toLowerCase();
 
     try {
+      let text = "";
+
       if (ext === ".pdf") {
         const data = await pdf(file);
-        parsedResumes.push(data.text);
+        text = data.text;
       } else if (ext === ".docx") {
         const { value } = await mammoth.extractRawText({ buffer: file });
-        parsedResumes.push(value);
+        text = value;
       } else {
         throw new Error(`Unsupported file format: ${ext}`);
       }
+
+      const trimmedText = text.trim();
+      console.log(
+        `[PARSE DEBUG] ${filename}: extracted ${trimmedText.length} characters`
+      );
+
+      parsedResumes.push(trimmedText);
     } catch (error) {
-      console.error(`Error parsing resume (${filename}):`, error);
-      parsedResumes.push(""); // Add empty if failed
+      console.error(`[PARSE ERROR] ${filename}:`, error);
+      parsedResumes.push(""); // Mark failed parse with empty string
     }
   }
 

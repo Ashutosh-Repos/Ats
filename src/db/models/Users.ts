@@ -23,8 +23,8 @@ const UserSchema = new Schema(
     password: { type: String },
     age: { type: Number },
     verifyCode: { type: String },
-    forgotCode: { type: String }, // newly added
-    avatar: { type: String }, // newly added
+    forgotCode: { type: String },
+    avatar: { type: String },
     verified: { type: Boolean, default: false },
   },
   { timestamps: true }

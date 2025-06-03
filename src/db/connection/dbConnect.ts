@@ -1,7 +1,7 @@
 import mongoose, { Connection, MongooseError } from "mongoose";
 
 // Environment variable for MongoDB URI
-const MONGODB_URI = `${process.env.MONGODB_URI!}/ats`;
+const MONGODB_URI = `${process.env.MONGODB_URI!}/${process.env.MONGO_DB_NAME!}?${process.env.MONGODB_CONN_PROP!}`;
 
 if (!MONGODB_URI) throw new Error("unable to get MONOGO_URI env");
 // Cache to store the connection and promise

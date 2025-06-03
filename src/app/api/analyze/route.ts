@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
             goodPoints: analysis.goodPoints,
             badPoints: analysis.badPoints,
             jobDescription,
-            resumeText: analysis.resumeText,
+            resumeText: parsedResumes,
             jobRole: jobRoleId || undefined,
           });
           return saved.toObject();

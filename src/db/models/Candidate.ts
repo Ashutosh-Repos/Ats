@@ -13,7 +13,7 @@ export interface ICandidate extends Document {
   updatedAt: Date;
 }
 
-const UserSchema = new Schema(
+const CandidateSchema = new Schema(
   {
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
@@ -26,4 +26,5 @@ const UserSchema = new Schema(
   { timestamps: true }
 );
 
-export const UserModel = models.User || mongoose.model("User", UserSchema);
+export const UserModel =
+  models.User || mongoose.model("Candidate", CandidateSchema);

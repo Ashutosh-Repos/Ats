@@ -13,7 +13,6 @@ import {
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ModeToggle } from "./theme-toogle";
 
 export default function NavbarDemo() {
   const navItems = [

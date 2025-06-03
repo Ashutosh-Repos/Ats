@@ -52,6 +52,8 @@ class ResumeMatcherTool extends StructuredTool {
     "goodPoints": string[],
     "badPoints": string[]
   }
+  
+  
 `;
 
     const response = await model.invoke([new HumanMessage(prompt)]);
@@ -70,16 +72,34 @@ class ResumeMatcherTool extends StructuredTool {
   }
 }
 
+export interface IAgentRespons {
+  candidateName?: string;
+  email?: string;
+  score?: number;
+  goodPoints?: string[];
+  badPoints?: string[];
+  error?: string;
+}
+
 export async function analyzeResumes(
   resumes: string[],
   jobDescription: string
 ) {
   const tool = new ResumeMatcherTool();
-  const results = [];
+  const results: IAgentRespons[] = [];
 
   for (const resume of resumes) {
-    const result = await tool.invoke({ resume, jobDescription });
-    results.push(result);
+    try {
+      const result = await tool.invoke({ resume, jobDescription });
+      results.push(result);
+    } catch (error) {
+      console.error("Error analyzing resume:", error);
+
+      results.push({
+        error:
+          error instanceof Error ? error.message : "Unknown error occurred",
+      });
+    }
   }
 
   return results;
