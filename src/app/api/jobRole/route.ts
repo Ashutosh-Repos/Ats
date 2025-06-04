@@ -32,6 +32,8 @@ const JobRoleCreateSchema = z
     positionTitle: z.string().min(1, "Position title is required").trim(),
     postingDate: z.string().optional(),
     jobDescription: z.string().optional(),
+    pay: z.number().min(0, "Pay must be non-negative").optional(),
+    workType: z.enum(["on-site", "remote", "hybrid"]).optional(),
     requiredSkills: z.array(z.string().trim()).optional(),
     minQualification: z
       .string()
@@ -144,6 +146,8 @@ export async function POST(
       postingDate,
       jobDescription,
       requiredSkills,
+      pay,
+      workType,
       minQualification,
       addedQualifications,
       qualificationDescription,
@@ -160,6 +164,8 @@ export async function POST(
       postingDate: toDate(postingDate) || now,
       jobDescription,
       requiredSkills: requiredSkills || [],
+      pay: pay,
+      workType: workType,
       academicQualifications: {
         minQualification,
         addedQualifications: addedQualifications || undefined,

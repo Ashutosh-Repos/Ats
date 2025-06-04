@@ -8,6 +8,8 @@ export interface IJobRole extends Document {
   postingDate: Date;
   requiredSkills?: string[];
   jobDescription?: string;
+  pay?: number; // Add pay
+  workType?: "on-site" | "remote" | "hybrid"; // Add workType
   academicQualifications: {
     minQualification: string;
     addedQualifications?: string;
@@ -53,6 +55,8 @@ const JobRoleSchema = new Schema(
       default: [],
     },
     jobDescription: { type: String },
+    pay: { type: Number }, // Add pay
+    workType: { type: String, enum: ["on-site", "remote", "hybrid"] }, // Add workType
     academicQualifications: {
       minQualification: { type: String, required: true },
       addedQualifications: { type: String },

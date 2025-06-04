@@ -51,6 +51,8 @@ interface UpdatePayload {
   postingDate?: Date;
   requiredSkills?: string[];
   jobDescription?: string;
+  pay?: number; // Add pay
+  workType?: "on-site" | "remote" | "hybrid";
   status?: "draft" | "open" | "closed" | "cancelled";
   hiringProcessStages?: Array<{
     name: string;
@@ -88,6 +90,8 @@ const JobRoleUpdateSchema = z
       .optional(),
     requiredSkills: z.array(z.string().trim()).optional(),
     jobDescription: z.string().optional(),
+    pay: z.number().min(0, "Pay must be non-negative").optional(),
+    workType: z.enum(["on-site", "remote", "hybrid"]).optional(),
     minQualification: z
       .string()
       .min(1, "Minimum qualification is required")
@@ -283,6 +287,8 @@ export async function PATCH(
       postingDate,
       requiredSkills,
       jobDescription,
+      pay,
+      workType,
       minQualification,
       addedQualifications,
       qualificationDescription,
@@ -295,6 +301,8 @@ export async function PATCH(
     if (requiredSkills) updatePayload.requiredSkills = requiredSkills;
     if (jobDescription) updatePayload.jobDescription = jobDescription;
     if (status) updatePayload.status = status;
+    if (pay) updatePayload.pay = pay;
+    if (workType) updatePayload.workType = workType;
     if (hiringProcessStages) {
       updatePayload.hiringProcessStages = hiringProcessStages.map((stage) => ({
         ...stage,

@@ -11,7 +11,6 @@ import { format } from "date-fns";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -19,20 +18,11 @@ import {
 } from "@/components/ui/form";
 import { YearPicker } from "@/components/YearPicker";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import mongoose from "mongoose";
@@ -135,22 +125,21 @@ const CreateJobRole = () => {
     "p-4 bg-zinc-900 rounded-2xl w-full h-max grid max-sm:grid-cols-1 max-md:grid-cols-2 max-lg:grid-cols-3 max-2xl:grid-cols-4 grid-cols-5 gap-4 scroll-smooth";
   return (
     <>
-      <br />
       <Form {...form}>
         <h1 className="w-full h-max p-4 font-black text-2xl">Create Job</h1>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
-          className="space-y-2 flex flex-wrap items-start justify-items-center p-4 bg-zinc-900 rounded-2xl w-full h-max gap-8 "
+          className="space-y-2 flex flex-wrap items-start justify-items-center p-4 sm:p-8 bg-zinc-900 rounded-2xl w-full h-max gap-8 "
         >
           <FormField
             control={form.control}
             name="positionTitle"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Position</FormLabel>
+                <FormLabel>Position Name</FormLabel>
                 <FormControl>
                   <Input
-                    placeholder="position"
+                    placeholder="Position Name"
                     {...field}
                     className="border border-zinc-400"
                   />
@@ -268,7 +257,7 @@ const CreateJobRole = () => {
                       onClick={() => reqSkilArray.append({ name: "" })}
                       className="w-max"
                     >
-                      <Plus className="mr-2 h-4 w-4" /> Add Skill
+                      <Plus className=" h-4 w-4" /> Add Skill
                     </Button>
                   </div>
                 </FormControl>
@@ -319,18 +308,23 @@ const CreateJobRole = () => {
               <FormItem>
                 <FormLabel>Qualification Description</FormLabel>
                 <FormControl>
-                  <Input
+                  <Textarea
                     placeholder="qualificationDescription"
                     {...field}
                     className="border border-zinc-400"
-                  />
+                  ></Textarea>
+                  {/* <Input
+                    placeholder="qualificationDescription"
+                    {...field}
+                    className="border border-zinc-400"
+                  /> */}
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
 
-          <FormField
+          {/* <FormField
             control={form.control}
             name="hiringProcessStages"
             render={() => (
@@ -521,10 +515,217 @@ const CreateJobRole = () => {
                 </FormControl>
               </FormItem>
             )}
+          /> */}
+
+          <FormField
+            control={form.control}
+            name="hiringProcessStages"
+            render={() => (
+              <FormItem>
+                <FormLabel className="w-max h-max">
+                  <h1>Hiring Process Stages</h1>
+                </FormLabel>
+                <FormControl>
+                  <div className="w-full h-max overflow-scroll gap-4">
+                    {hiringStageArray.fields.map((items, index) => (
+                      <div
+                        key={index}
+                        className="w-max h-max flex flex-wrap gap-4 p-1 items-start justify-items-center"
+                      >
+                        <div className="w-full h-max flex gap-4 items-center">
+                          <h1>Stage {index + 1}</h1>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={() => hiringStageArray.remove(index)}
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                        <FormField
+                          control={form.control}
+                          name={`hiringProcessStages.${index}.name`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Name</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="Stage Name"
+                                  {...field}
+                                  className="border border-zinc-400"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`hiringProcessStages.${index}.description`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Description</FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  placeholder="Description"
+                                  {...field}
+                                  className="w-64 border border-zinc-400"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`hiringProcessStages.${index}.maxCandidates`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Maximum Candidates</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  placeholder="Max Candidates"
+                                  {...field}
+                                  onChange={(e) =>
+                                    field.onChange(Number(e.target.value))
+                                  }
+                                  className="border border-zinc-400 w-32"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* <FormField
+                          control={form.control}
+                          name={`hiringProcessStages.${index}.status`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <Select
+                                  onValueChange={field.onChange}
+                                  defaultValue={field.value ?? ""}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select status" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="upcoming">
+                                      Upcoming
+                                    </SelectItem>
+                                    <SelectItem value="ongoing">
+                                      Ongoing
+                                    </SelectItem>
+                                    <SelectItem value="completed">
+                                      Completed
+                                    </SelectItem>
+                                    <SelectItem value="skipped">
+                                      Skipped
+                                    </SelectItem>
+                                    <SelectItem value="terminated">
+                                      Terminated
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        /> */}
+                        <FormField
+                          control={form.control}
+                          name={`hiringProcessStages.${index}.scheduledDate`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Scheduled Date</FormLabel>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <FormControl>
+                                    <Button
+                                      variant="outline"
+                                      className="w-full border border-zinc-400"
+                                    >
+                                      {field.value
+                                        ? format(new Date(field.value), "PPP")
+                                        : "Pick a date"}
+                                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                  </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 bg-zinc-800 border-0">
+                                  <Calendar
+                                    mode="single"
+                                    selected={
+                                      field.value
+                                        ? new Date(field.value)
+                                        : undefined
+                                    }
+                                    onSelect={(date) =>
+                                      field.onChange(date?.toISOString())
+                                    }
+                                    disabled={(date) => date < new Date()}
+                                    initialFocus
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`hiringProcessStages.${index}.isMandatory`}
+                          render={({ field }) => (
+                            <FormItem className="flex gap-2 items-center">
+                              <FormControl>
+                                <input
+                                  type="checkbox"
+                                  checked={field.value ?? false} // Map field.value to checked
+                                  onChange={(e) =>
+                                    field.onChange(e.target.checked)
+                                  } // Update with checked state
+                                  onBlur={field.onBlur}
+                                  name={field.name}
+                                  ref={field.ref}
+                                />
+                              </FormControl>
+                              <FormLabel>Mandatory</FormLabel>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() =>
+                        hiringStageArray.append({
+                          name: "",
+                          description: "",
+                          isMandatory: false,
+                          maxCandidates: 1,
+                          status: "upcoming",
+                          scheduledDate: undefined,
+                          appearedCandidates: [],
+                          disqualifiedCandidates: [],
+                          qualifiedCandidates: [],
+                        })
+                      }
+                      className="w-max"
+                    >
+                      <Plus className="mr-2 h-4 w-4" /> Add Stage
+                    </Button>
+                  </div>
+                </FormControl>
+              </FormItem>
+            )}
           />
 
           <Button type="submit" className="bg-white text-black">
-            Submit
+            Create
           </Button>
         </form>
       </Form>

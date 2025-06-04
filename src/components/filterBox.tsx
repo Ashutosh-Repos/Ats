@@ -1,14 +1,12 @@
 "use client";
 import * as React from "react";
 import { DropdownMenuCheckboxItemProps } from "@radix-ui/react-dropdown-menu";
-import { Button } from "@/components/ui/button";
 import { IconX } from "@tabler/icons-react";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 type Checked = DropdownMenuCheckboxItemProps["checked"];
@@ -32,10 +30,6 @@ const Filter = ({
 };
 
 const FilterBox = () => {
-  const [showStatusBar, setShowStatusBar] = React.useState<Checked>(false);
-  const [showActivityBar, setShowActivityBar] = React.useState<Checked>(false);
-  const [showPanel, setShowPanel] = React.useState<Checked>(false);
-
   const [nameFilter, setNameFilter] = React.useState<Checked>(false);
   const [dateFilter, setDateFilter] = React.useState<Checked>(false);
   const [statusOpenFilter, setStatusOpenFilter] =
@@ -113,30 +107,6 @@ const FilterBox = () => {
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {showStatusBar && (
-        <Filter
-          filter="Status"
-          onClick={() => {
-            setShowStatusBar(false);
-          }}
-        />
-      )}
-      {showActivityBar && (
-        <Filter
-          filter="Activity"
-          onClick={() => {
-            setShowActivityBar(false);
-          }}
-        />
-      )}
-      {showPanel && (
-        <Filter
-          filter="Panel"
-          onClick={() => {
-            setShowPanel(false);
-          }}
-        />
-      )}
     </div>
   );
 };
