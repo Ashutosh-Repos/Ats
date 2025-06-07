@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { JobRoleModel, IJobRole } from "@/db/models/JobRole";
+import { JobRoleModel } from "@/db/models/JobRole";
 import { connectToDatabase } from "@/db/connection/dbConnect";
 import mongoose, { Types } from "mongoose";
 import { z } from "zod";
@@ -15,36 +15,7 @@ interface ApiResponse<T> {
 }
 
 // Type for lean JobRole (plain object without Mongoose Document methods)
-type LeanJobRole = {
-  _id: Types.ObjectId;
-  hiringManager: Types.ObjectId;
-  hiringYear: number;
-  positionTitle: string;
-  postingDate: Date;
-  requiredSkills?: string[];
-  jobDescription?: string;
-  academicQualifications: {
-    minQualification: string;
-    addedQualifications?: string;
-    description?: string;
-  };
-  hiringProcessStages: {
-    name: string;
-    description?: string;
-    isMandatory: boolean;
-    maxCandidates?: number;
-    scheduledDate?: Date;
-    status?: "upcoming" | "ongoing" | "completed" | "skipped" | "terminated";
-    appearedCandidates?: Types.ObjectId[];
-    disqualifiedCandidates?: Types.ObjectId[];
-    qualifiedCandidates?: Types.ObjectId[];
-  }[];
-  status?: "draft" | "open" | "closed" | "cancelled";
-  createdAt?: Date;
-  updatedAt?: Date;
-  __v?: number; // Include __v for Mongoose's version key
-};
-
+import { LeanJobRole } from "@/db/models/JobRole";
 // Type for update payload in PATCH request
 interface UpdatePayload {
   positionTitle?: string;

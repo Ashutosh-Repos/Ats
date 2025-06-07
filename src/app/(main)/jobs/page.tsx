@@ -14,15 +14,8 @@ const Jobs = () => {
   const context = useJobRoles();
   console.log("the context is", context);
   const { jobRoles, isLoading, error, fetchJobRoles } = context;
-
   const { data: session, status: sessionStatus } = useSession();
-  const hrId = session?.user?.id; // Assuming user.id is the MongoDB ObjectId
-
-  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "name">("newest");
-  const [filterStatus, setFilterStatus] = useState<
-    "all" | "draft" | "open" | "closed" | "cancelled"
-  >("all");
-
+  const hrId = session?.user?.id;
   useEffect(() => {
     if (hrId && sessionStatus === "authenticated") {
       fetchJobRoles(hrId)
@@ -37,28 +30,7 @@ const Jobs = () => {
     } else if (sessionStatus === "unauthenticated") {
       toast.error("Please log in to view job roles.");
     }
-  }, [hrId, sessionStatus, fetchJobRoles]);
-
-  const sortedJobRoles = [...jobRoles].sort((a, b) => {
-    if (sortBy === "newest") {
-      return (
-        new Date(b.createdAt || 0).getTime() -
-        new Date(a.createdAt || 0).getTime()
-      );
-    } else if (sortBy === "oldest") {
-      return (
-        new Date(a.createdAt || 0).getTime() -
-        new Date(b.createdAt || 0).getTime()
-      );
-    } else {
-      return a.positionTitle.localeCompare(b.positionTitle);
-    }
-  });
-
-  const filteredJobRoles =
-    filterStatus === "all"
-      ? sortedJobRoles
-      : sortedJobRoles.filter((job) => job.status === filterStatus);
+  }, [jobRoles.length, hrId, sessionStatus, fetchJobRoles]);
 
   const getCardProps = (job: IJobRole) => {
     const currentStage =
@@ -74,11 +46,13 @@ const Jobs = () => {
         : null;
 
     return {
+      id: job._id.toString(),
+      position: job.positionTitle,
       status: job.status || "draft",
-      pay: 12, // Placeholder: Add to schema or derive
+      pay: job.pay, // Placeholder: Add to schema or derive
       currStage: currentStage?.name || "N/A",
       nextStage: nextStage?.name || "N/A",
-      workType: "hybrid" as "on-site" | "remote" | "hybrid", // Placeholder: Add to schema
+      workType: job.workType || "N/A", // Placeholder: Add to schema
       totalApplication: job.hiringProcessStages.reduce(
         (sum, stage) => sum + (stage.appearedCandidates?.length || 0),
         0
@@ -86,17 +60,60 @@ const Jobs = () => {
       appearing: currentStage?.appearedCandidates?.length || 0,
     };
   };
+
+  const [filters, setFilters] = useState<{
+    status: string[];
+    workType: string[];
+  }>({
+    status: [],
+    workType: [],
+  });
+  const [sortBy, setSortBy] = useState<string>("newest");
+
+  const filteredAndSortedJobs = React.useMemo(() => {
+    let result = [...jobRoles];
+
+    // Apply filters
+    if (filters.status.length > 0) {
+      result = result.filter((job) =>
+        filters.status.includes(job.status || "draft")
+      );
+    }
+    if (filters.workType.length > 0) {
+      result = result.filter((job) =>
+        filters.workType.includes(job.workType || "hybrid")
+      );
+    }
+
+    // Apply sorting
+    result.sort((a, b) => {
+      if (sortBy === "newest") {
+        return (
+          new Date(b.postingDate).getTime() - new Date(a.postingDate).getTime()
+        );
+      } else if (sortBy === "oldest") {
+        return (
+          new Date(a.postingDate).getTime() - new Date(b.postingDate).getTime()
+        );
+      } else if (sortBy === "name") {
+        return a.positionTitle.localeCompare(b.positionTitle);
+      }
+      return 0;
+    });
+
+    return result;
+  }, [jobRoles, filters, sortBy]);
   return (
     <>
       <div className="w-full max-w-[60rem] h-12 flex items-center justify-end-safe p-2 relative gap-2">
         <div className="flex items-center justify-center gap-2">
-          <FilterBox />
+          <FilterBox onFilterChange={setFilters} />
         </div>
         <div className="flex items-center justify-center gap-2">
           <SelectBox
             selectValues={["newest", "oldest", "name"]}
             selectLabel="sortBy"
-            handler={() => {}}
+            onSortChange={setSortBy}
           />
         </div>
         <Button
@@ -130,18 +147,17 @@ const Jobs = () => {
               </Button>
             </div>
           )}
-          {!isLoading && !error && filteredJobRoles.length === 0 && (
-            <p className="p-4 text-center">No job roles found.</p>
-          )}
+          {!isLoading &&
+            !error &&
+            jobRoles.length === 0 &&
+            filteredAndSortedJobs.length === 0 && (
+              <p className="p-4 text-center">No job roles found.</p>
+            )}
           <div
             className={`p-4 w-full h-max grid max-sm:grid-cols-1 max-md:grid-cols-2 max-lg:grid-cols-3 max-2xl:grid-cols-4 grid-cols-5 gap-4 scroll-smooth`}
           >
-            {filteredJobRoles.map((job) => (
-              <Card
-                key={job._id.toString()}
-                {...getCardProps(job)}
-                // onClick={() => router.push(`/jobs/${job._id}`)} // Navigate to details page
-              />
+            {filteredAndSortedJobs.map((job) => (
+              <Card key={job._id.toString()} {...getCardProps(job)} />
             ))}
           </div>
         </>

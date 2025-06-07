@@ -38,42 +38,39 @@ export const JobRoleProvider: React.FC<JobRoleProviderProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   // Function to fetch job roles by hrId
-  const fetchJobRoles = useCallback(
-    async (hrId: string) => {
-      setIsLoading(true);
-      setError(null);
+  const fetchJobRoles = useCallback(async (hrId: string) => {
+    setIsLoading(true);
+    setError(null);
 
-      try {
-        const response = await fetch(`/api/jobRole?hr=${hrId}`, {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        });
+    try {
+      const response = await fetch(`/api/jobRole?hr=${hrId}`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
 
-        const result: ApiResponse<IJobRole[]> = await response.json();
+      const result: ApiResponse<IJobRole[]> = await response.json();
 
-        if (!response.ok) {
-          throw new Error(
-            result.error || `HTTP error! Status: ${response.status}`
-          );
-        }
-
-        if (result.success && result.data) {
-          setJobRoles(result.data);
-          toast.success(result.message || "Job roles fetched successfully");
-        } else {
-          throw new Error(result.error || "Failed to fetch job roles");
-        }
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : "An unexpected error occurred";
-        setError(errorMessage);
-        toast.error(errorMessage || "Something went wrong");
-      } finally {
-        setIsLoading(false);
+      if (!response.ok) {
+        throw new Error(
+          result.error || `HTTP error! Status: ${response.status}`
+        );
       }
-    },
-    [toast]
-  );
+
+      if (result.success && result.data) {
+        setJobRoles(result.data);
+        toast.success(result.message || "Job roles fetched successfully");
+      } else {
+        throw new Error(result.error || "Failed to fetch job roles");
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "An unexpected error occurred";
+      setError(errorMessage);
+      toast.error(errorMessage || "Something went wrong");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   return (
     <JobRoleContext.Provider

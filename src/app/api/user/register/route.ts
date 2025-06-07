@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { userSchema } from "@/zod/userSchema";
-import { UserModel } from "@/db/models/Users";
+import { User, Credential, Role } from "@/db/models"; // Import from your models file
 import { connectToDatabase } from "@/db/connection/dbConnect";
 import bcrypt from "bcrypt-edge";
 import hyperid from "hyperid";
@@ -8,7 +8,7 @@ import nodemailer from "nodemailer";
 import EmailVerify from "@/components/template/EmailVerify";
 import { render } from "@react-email/components";
 import { ZodError } from "zod";
-import { MongoError } from "mongodb";
+import { MongoServerError } from "mongodb";
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
@@ -30,15 +30,14 @@ const sendVerificationEmail = async (
       EmailVerify({ name: fullname, verifyCode: verifyCode })
     );
     const options = {
-      from: "ashu9226kumar@gmail.com",
+      from: process.env.DOMAIN_EMAIL || "ashu9226kumar@gmail.com",
       to: toEmail,
       subject: "Email Verification",
       html: htmlEmail,
     };
     const info = await transporter.sendMail(options);
-    console.log("info log");
-    console.log(info);
-  } catch (error) {
+    console.log("Email sent:", info.messageId);
+  } catch (error: unknown) {
     console.error("Email sending error:", error);
     throw new Error("Failed to send verification email");
   }
@@ -47,39 +46,44 @@ const sendVerificationEmail = async (
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
   try {
     await connectToDatabase();
-    console.log("after db");
+
     const body = await request.json();
-    console.log("after json");
-    console.log(body);
-
     const { email, password, age, name } = await userSchema.parseAsync(body);
-    if (!password || !password.trim()) throw new Error("password required");
+    if (!password || !password.trim()) throw new Error("Password is required");
 
-    console.log("after parsing");
+    // Find default role (e.g., hiringManager)
+    const role = await Role.findOne({ name: "hiringManager" });
+    if (!role) throw new Error("Default role not found");
 
-    const existingUser = await UserModel.findOne({ email: email });
-    if (existingUser?.verified) {
-      return NextResponse.json({
-        success: false,
-        message: "User with this email already exists",
-      });
+    // Check for existing user
+    const existingUser = await User.findOne({ email });
+    if (existingUser && existingUser.status === "verified") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "User with this email already exists and is verified",
+        },
+        { status: 400 }
+      );
     }
-    console.log("1");
-    const hashedPassword = bcrypt.hashSync(password as string, 10);
-    const code = hyperid({ urlSafe: true }).uuid;
-    console.log("2");
+
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    const verifyCode = hyperid({ urlSafe: true }).uuid;
 
     if (existingUser) {
-      Object.assign(existingUser, {
-        name,
-        password: hashedPassword,
-        age,
-        verifyCode: code,
+      // Update existing unverified user
+      const existingCredential = await Credential.findOne({
+        userId: existingUser._id,
       });
-      await existingUser.save();
-      console.log("3");
-      await sendVerificationEmail(email, name, code);
-      console.log("4");
+      if (!existingCredential)
+        throw new Error("Credential not found for existing user");
+
+      existingUser.name = name;
+      existingCredential.password = hashedPassword;
+      existingCredential.verifyCode = verifyCode;
+
+      await Promise.all([existingUser.save(), existingCredential.save()]);
+      await sendVerificationEmail(email, name, verifyCode);
 
       return NextResponse.json({
         success: true,
@@ -87,30 +91,37 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       });
     }
 
-    // Create new user if not found
-    console.log("5");
-    const newUser = await UserModel.create({
-      name: name,
-      email: email,
-      password: hashedPassword,
-      age: age,
-      role: "hr",
-      verified: false,
-      verifyCode: code,
+    // Create new user
+    const newUser = await User.create({
+      name,
+      email,
+      age,
+      roleId: role._id,
+      status: "unverified",
+      joiningDate: new Date(),
     });
-    console.log("6");
-    if (!newUser) throw new Error("unable to create new user server error");
-    console.log("7");
-    await sendVerificationEmail(email, name, code);
-    console.log("8");
+
+    const newCredential = await Credential.create({
+      userId: newUser._id,
+      password: hashedPassword,
+      verifyCode,
+    });
+
+    if (!newUser || !newCredential) {
+      throw new Error("Failed to create user or credential");
+    }
+
+    await sendVerificationEmail(email, name, verifyCode);
+
     return NextResponse.json({
       success: true,
       message:
         "User created successfully, verification link sent (valid for 1 hour)",
       data: {
-        ...newUser,
-        password: undefined,
-        verifyCode: undefined,
+        name: newUser.name,
+        email: newUser.email,
+        status: newUser.status,
+        joiningDate: newUser.joiningDate,
       },
     });
   } catch (error: unknown) {
@@ -122,18 +133,27 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid data format",
+          message: "Invalid data format",
           details: fieldErrors,
         },
         { status: 400 }
       );
     }
 
-    if (error instanceof MongoError) {
+    if (error instanceof MongoServerError) {
+      if (error.code === 11000) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Email already exists",
+          },
+          { status: 400 }
+        );
+      }
       return NextResponse.json(
         {
           success: false,
-          error: "Database error",
+          message: "Database error",
           details: error.message,
         },
         { status: 500 }
@@ -144,7 +164,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json(
         {
           success: false,
-          error: error.message,
+          message: error.message,
         },
         { status: 500 }
       );
@@ -153,7 +173,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     return NextResponse.json(
       {
         success: false,
-        error: "An unexpected error occurred",
+        message: "An unexpected error occurred",
       },
       { status: 500 }
     );

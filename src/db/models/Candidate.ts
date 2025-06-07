@@ -22,6 +22,10 @@ const CandidateSchema = new Schema(
     applicationStatus: { type: Number },
     analysis: { type: Schema.Types.ObjectId },
     resume: { type: String },
+    gender: {
+      type: String,
+      required: true,
+    },
   },
   { timestamps: true }
 );

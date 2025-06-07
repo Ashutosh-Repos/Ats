@@ -31,6 +31,38 @@ export interface IJobRole extends Document {
   updatedAt?: Date;
 }
 
+export type LeanJobRole = {
+  _id: Types.ObjectId;
+  hiringManager: Types.ObjectId;
+  hiringYear: number;
+  positionTitle: string;
+  postingDate: Date;
+  requiredSkills?: string[];
+  jobDescription?: string;
+  pay?: number; // Add pay
+  workType?: "on-site" | "remote" | "hybrid";
+  academicQualifications: {
+    minQualification: string;
+    addedQualifications?: string;
+    description?: string;
+  };
+  hiringProcessStages: {
+    name: string;
+    description?: string;
+    isMandatory: boolean;
+    maxCandidates?: number;
+    scheduledDate?: Date;
+    status?: "upcoming" | "ongoing" | "completed" | "skipped" | "terminated";
+    appearedCandidates?: Types.ObjectId[];
+    disqualifiedCandidates?: Types.ObjectId[];
+    qualifiedCandidates?: Types.ObjectId[];
+  }[];
+  status?: "draft" | "open" | "closed" | "cancelled";
+  createdAt?: Date;
+  updatedAt?: Date;
+  __v?: number; // Include __v for Mongoose's version key
+};
+
 const JobRoleSchema = new Schema(
   {
     hiringManager: {

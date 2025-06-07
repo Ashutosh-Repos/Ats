@@ -1,3 +1,5 @@
+"use client";
+import { useRouter } from "next/navigation";
 import React from "react";
 import {
   IconBuildings,
@@ -6,6 +8,8 @@ import {
 } from "@tabler/icons-react";
 
 const Card = ({
+  id,
+  position,
   workType,
   pay,
   status,
@@ -14,18 +18,26 @@ const Card = ({
   nextStage,
   totalApplication,
 }: {
+  id: string;
+  position: string;
   workType: string;
-  pay: number;
+  pay: number | undefined;
   status: string;
   currStage: string;
   nextStage: string;
   appearing: number;
   totalApplication: number;
 }) => {
+  const router = useRouter();
   return (
-    <div className="w-full max-w-96 mx-auto rounded-2xl bg-zinc-900 text-white aspect-video flex flex-col p-4 cursor-pointer">
+    <div
+      className="w-full max-w-96 mx-auto rounded-2xl bg-zinc-900 text-white aspect-video flex flex-col p-4 cursor-pointer"
+      onClick={() => {
+        router.push(`jobs/${id}`);
+      }}
+    >
       <div className="flex items-center justify-between">
-        <h1 className="w-max font-bold">Backend-Software-Engineer</h1>
+        <h1 className="w-max font-bold">{position}</h1>
         <span className="w-max p-2 rounded-xl text-xs bg-zinc-800">
           <p>{status}</p>
         </span>
@@ -44,11 +56,12 @@ const Card = ({
           )}
           <p>{workType}</p>
         </span>
-
-        <span className="flex gap-0.5 items-center text-xs">
-          <IconCurrencyDollar size={14} />
-          <p>{pay} Lpa</p>
-        </span>
+        {pay ? (
+          <span className="flex gap-0.5 items-center text-xs">
+            <IconCurrencyDollar size={14} />
+            {pay == 0 ? "un-paid" : <p>{pay} Lpa</p>}
+          </span>
+        ) : null}
       </div>
       <br />
       <div className="grid grid-cols-2 grid-rows-2 place-items-start gap-2 text-center">

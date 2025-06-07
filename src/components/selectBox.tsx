@@ -1,3 +1,4 @@
+import React, { useState } from "react";
 import {
   Select,
   SelectContent,
@@ -6,19 +7,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import React from "react";
-
 const SelectBox = ({
   selectValues,
   selectLabel,
-  handler,
+  onSortChange,
 }: {
   selectValues: string[];
   selectLabel: string;
-  handler: () => void;
+  onSortChange: (sortBy: string) => void;
 }) => {
+  const [sortBy, setSortBy] = useState(selectValues[0]);
+
+  const handleSortChange = (value: string) => {
+    setSortBy(value);
+    onSortChange(value);
+  };
   return (
-    <Select>
+    <Select value={sortBy} onValueChange={handleSortChange}>
       <SelectTrigger className="w-max h-max px-2 rounded-2xl border-2 text-zinc-300 text-sm bg-zinc-800 border-zinc-800">
         <SelectValue
           placeholder={selectLabel}

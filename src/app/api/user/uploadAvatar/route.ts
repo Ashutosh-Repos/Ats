@@ -3,9 +3,9 @@ import path from "path";
 import { randomUUID } from "crypto";
 import fs from "node:fs/promises";
 import { v2 as cloudinary } from "cloudinary";
-import { MongoError } from "mongodb";
+import { MongoServerError } from "mongodb";
 import sharp from "sharp";
-import { UserModel } from "@/db/models/Users";
+import { User } from "@/db/models"; // Import User model from new schema
 import { connectToDatabase } from "@/db/connection/dbConnect";
 
 // Allowed image types and maximum file size (in bytes)
@@ -23,10 +23,10 @@ cloudinary.config({
 const uploadToCloudinary = async (filePath: string): Promise<string> => {
   try {
     const result = await cloudinary.uploader.upload(filePath, {
-      resource_type: "image", // Force image resource type
+      resource_type: "image",
     });
     return result.secure_url;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Cloudinary upload failed: ${error}`);
     throw new Error("Failed to upload to Cloudinary");
   }
@@ -60,7 +60,7 @@ export const POST = async (req: NextRequest): Promise<NextResponse> => {
 
     // Validate file existence and type
     if (!file) {
-      throw new Error("File is required.");
+      throw new Error("Avatar file is required.");
     }
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       throw new Error(
@@ -93,27 +93,31 @@ export const POST = async (req: NextRequest): Promise<NextResponse> => {
     }
 
     // Update user avatar in the database
-    const dbres = await UserModel.findByIdAndUpdate(
+    const updatedUser = await User.findByIdAndUpdate(
       id,
       { avatar: url },
-      { new: true }
+      { new: true, runValidators: true }
     );
-    if (!dbres) {
-      throw new Error("Failed to update avatar in the database.");
+    if (!updatedUser) {
+      throw new Error("User not found or failed to update avatar.");
     }
 
     // Successful response
     return NextResponse.json(
-      { success: true, message: "Avatar updated successfully", data: { url } },
+      {
+        success: true,
+        message: "Avatar updated successfully",
+        data: { url },
+      },
       { status: 201 }
     );
-  } catch (error) {
+  } catch (error: unknown) {
     // MongoDB-specific error handling
-    if (error instanceof MongoError) {
+    if (error instanceof MongoServerError) {
       return NextResponse.json(
         {
           success: false,
-          error: "Database error",
+          message: "Database error",
           details: error.message,
         },
         { status: 500 }
@@ -125,9 +129,9 @@ export const POST = async (req: NextRequest): Promise<NextResponse> => {
       return NextResponse.json(
         {
           success: false,
-          error: error.message,
+          message: error.message,
         },
-        { status: 500 }
+        { status: 400 }
       );
     }
 
@@ -135,7 +139,7 @@ export const POST = async (req: NextRequest): Promise<NextResponse> => {
     return NextResponse.json(
       {
         success: false,
-        error: "An unexpected error occurred",
+        message: "An unexpected error occurred",
       },
       { status: 500 }
     );
@@ -144,7 +148,7 @@ export const POST = async (req: NextRequest): Promise<NextResponse> => {
     if (inputFilePath) {
       try {
         await fs.unlink(inputFilePath);
-      } catch (unlinkError) {
+      } catch (unlinkError: unknown) {
         console.error(`Failed to delete file: ${unlinkError}`);
       }
     }

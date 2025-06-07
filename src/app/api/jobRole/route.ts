@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { JobRoleModel } from "@/db/models/JobRole";
+import { Job, HiringPipeline, JobSkill, User, Department, WorkType, ContractType } from "@/db/models"; // Import models and enums
 import { connectToDatabase } from "@/db/connection/dbConnect";
 import { z } from "zod";
 import mongoose from "mongoose";
+import { MongoServerError } from "mongodb";
 
 // ----------- Types -----------
 
@@ -18,103 +19,88 @@ interface ApiResponse<T> {
 
 const JobRoleCreateSchema = z
   .object({
-    hr: z
+    hiringManagerId: z
       .string()
-      .min(1, "Hiring Manager is required")
+      .min(1, "Hiring Manager ID is required")
       .refine(
         (id) => mongoose.Types.ObjectId.isValid(id),
         "Invalid hiring manager ID"
       ),
-    hiringYear: z
-      .number()
-      .min(new Date().getFullYear(), "Hiring year must be current or future")
-      .optional(),
-    positionTitle: z.string().min(1, "Position title is required").trim(),
-    postingDate: z.string().optional(),
-    jobDescription: z.string().optional(),
-    pay: z.number().min(0, "Pay must be non-negative").optional(),
-    workType: z.enum(["on-site", "remote", "hybrid"]).optional(),
-    requiredSkills: z.array(z.string().trim()).optional(),
-    minQualification: z
+    departmentId: z
       .string()
-      .min(1, "Minimum qualification is required")
-      .trim(),
-    addedQualifications: z.string().optional(),
-    qualificationDescription: z.string().optional(),
-    hiringProcessStages: z
-      .array(
-        z.object({
-          name: z.string().min(1, "Stage name is required").trim(),
-          description: z.string().optional(),
-          isMandatory: z.boolean().optional(),
-          maxCandidates: z
-            .number()
-            .min(1, "At least 1 candidate required")
-            .optional(),
-          scheduledDate: z.union([z.string(), z.date()]).optional(),
-          status: z
-            .enum(["upcoming", "ongoing", "completed", "skipped", "terminated"])
-            .optional(),
-          appearedCandidates: z
-            .array(
-              z.string().refine(
-                (id) => mongoose.Types.ObjectId.isValid(id),
-                (val) => ({ message: `Invalid candidate ID: ${val}` })
-              )
-            )
-            .optional(),
-          disqualifiedCandidates: z
-            .array(
-              z.string().refine(
-                (id) => mongoose.Types.ObjectId.isValid(id),
-                (val) => ({ message: `Invalid candidate ID: ${val}` })
-              )
-            )
-            .optional(),
-          qualifiedCandidates: z
-            .array(
-              z.string().refine(
-                (id) => mongoose.Types.ObjectId.isValid(id),
-                (val) => ({ message: `Invalid candidate ID: ${val}` })
-              )
-            )
-            .optional(),
-        })
-      )
-      .optional(),
-    status: z.enum(["draft", "open", "closed", "cancelled"]).optional(),
+      .min(1, "Department ID is required")
+      .refine(
+        (id) => mongoose.Types.ObjectId.isValid(id),
+        "Invalid department ID"
+      ),
+    pipelineId: z
+      .string()
+      .min(1, "Pipeline ID is required")
+      .refine(
+        (id) => mongoose.Types.ObjectId.isValid(id),
+        "Invalid pipeline ID"
+      ),
+    title: z.string().min(1, "Job title is required").trim(),
+    workType: z.enum(Object.values(WorkType) as [string, ...string[]]).optional(),
+    workLocation: z.string().min(1, "Work location is required").trim(),
+    contract: z.enum(Object.values(ContractType) as [string, ...string[]]).optional(),
+    headCount: z.number().int().positive("Head count must be positive").optional(),
+    minimumSalary: z.number().nonnegative("Minimum salary must be non-negative").optional(),
+    maximumSalary: z.number().nonnegative("Maximum salary must be non-negative").optional(),
+    jobDescription: z.string().optional(),
+    requiredSkills: z.array(z.string().trim()).optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (data) => !data.maximumSalary || !data.minimumSalary || data.maximumSalary >= data.minimumSalary,
+    {
+      message: "Maximum salary must be greater than or equal to minimum salary",
+      path: ["maximumSalary"],
+    }
+  );
 
 const JobRoleQuerySchema = z.object({
-  hr: z
+  hiringManagerId: z
     .string()
     .min(1, "Hiring Manager ID is required")
-    .refine((id) => mongoose.Types.ObjectId.isValid(id), "Invalid HR ID"),
+    .refine(
+      (id) => mongoose.Types.ObjectId.isValid(id),
+      "Invalid hiring manager ID"
+    ),
+  page: z.string().regex(/^\d+$/, "Page must be a positive integer").optional().transform(Number).default(1),
+  limit: z.string().regex(/^\d+$/, "Limit must be a positive integer").optional().transform(Number).default(10),
 });
 
 // ----------- Utilities -----------
 
-const toDate = (value?: string | Date): Date | undefined => {
-  if (!value) return undefined;
-  const date = new Date(value);
-  return isNaN(date.getTime()) ? undefined : date;
-};
-
-const handleError = (error: unknown): ApiResponse<never> => {
+const handleError = (error: unknown): ApiResponse<never> {
   console.error("Error:", error);
   if (error instanceof mongoose.Error.ValidationError) {
     return {
       success: false,
       error: "Validation error",
       issues: Object.fromEntries(
-        Object.values(error.errors).map((err) => [err.path, [err.message]])
+        Object.entries(error.errors).map(([path, err]) => [path, [err.message]])
       ),
+    };
+  }
+  if (error instanceof MongoServerError) {
+    if (error.code === 11000) {
+      return {
+        success: false,
+        error: "Duplicate key error",
+        issues: { general: ["A job with these details already exists"] },
+      };
+    }
+    return {
+      success: false,
+      error: "Database error",
+      issues: { general: [error.message] },
     };
   }
   return {
     success: false,
-    error: error instanceof Error ? error.message : "Internal Server Error",
+    error: error instanceof Error ? error.message : "An unexpected error occurred",
   };
 };
 
@@ -133,71 +119,84 @@ export async function POST(
         {
           success: false,
           error: "Validation failed",
-          issues: parsed.error.flatten().fieldErrors,
+          details: parsed.error.flatten().fieldErrors,
         },
         { status: 400 }
       );
     }
 
     const {
-      hr,
-      hiringYear,
-      positionTitle,
-      postingDate,
+      hiringManagerId,
+      departmentId,
+      pipelineId,
+      title,
+      workType,
+      workLocation,
+      contract,
+      headCount,
+      minimumSalary,
+      maximumSalary,
       jobDescription,
       requiredSkills,
-      pay,
-      workType,
-      minQualification,
-      addedQualifications,
-      qualificationDescription,
-      hiringProcessStages,
-      status,
     } = parsed.data;
 
-    const now = new Date();
+    // Validate hiring manager, department, and pipeline
+    const [hiringManager, department, pipeline] = await Promise.all([
+      User.findById(hiringManagerId),
+      Department.findById(departmentId),
+      HiringPipeline.findById(pipelineId),
+    ]);
 
-    const jobRole = await JobRoleModel.create({
-      hiringManager: new mongoose.Types.ObjectId(hr),
-      hiringYear: hiringYear || now.getFullYear(),
-      positionTitle,
-      postingDate: toDate(postingDate) || now,
-      jobDescription,
-      requiredSkills: requiredSkills || [],
-      pay: pay,
+    if (!hiringManager) {
+      throw new Error("Invalid hiring manager ID.");
+    }
+    if (!department) {
+      throw new Error("Invalid department ID.");
+    }
+    if (!pipeline) {
+      throw new Error("Invalid pipeline ID.");
+    }
+    if (pipeline.createdById.toString() !== hiringManagerId) {
+      throw new Error("Pipeline does not belong to the specified hiring manager.");
+    }
+
+    // Create job
+    const job = await Job.create({
+      title,
+      departmentId,
+      hiringManagerId: null, // Set to null as per schema allowance
+      hiringPipelineId: pipelineId,
       workType: workType,
-      academicQualifications: {
-        minQualification,
-        addedQualifications: addedQualifications || undefined,
-        description: qualificationDescription || undefined,
-      },
-      hiringProcessStages:
-        hiringProcessStages?.map((stage) => ({
-          ...stage,
-          scheduledDate: toDate(stage.scheduledDate),
-          appearedCandidates: stage.appearedCandidates?.map(
-            (id) => new mongoose.Types.ObjectId(id)
-          ),
-          disqualifiedCandidates: stage.disqualifiedCandidates?.map(
-            (id) => new mongoose.Types.ObjectId(id)
-          ),
-          qualifiedCandidates: stage.qualifiedCandidates?.map(
-            (id) => new mongoose.Types.ObjectId(id)
-          ),
-        })) || [],
-      status: status || "draft",
+      workLocation,
+      contract: contract,
+      headCount: headCount || 1,
+      minimumSalary: minimumSalary ?? 0,
+      maximumSalary: maximumSalary ?? minimumSalary ?? 0,
+      jobDescription: jobDescription || null,
     });
+
+    // Create job skills
+    const skills = requiredSkills?.map((skill) => ({
+      jobId: job._id,
+      skill,
+    })) ?? [];
+    if (skills.length) {
+      await JobSkill.insertMany(skills);
+    }
 
     return NextResponse.json(
       {
         success: true,
-        data: jobRole,
-        message: "Job role created successfully",
+        data: { job, skills },
+        message: "Job created successfully",
       },
       { status: 201 }
     );
-  } catch (error) {
-    return NextResponse.json(handleError(error), { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json(
+      handleError(error),
+      { status: error instanceof Error ? 400 : 500 }
+    );
   }
 }
 
@@ -209,41 +208,141 @@ export async function GET(
   try {
     await connectToDatabase();
     const { searchParams } = new URL(req.url);
-    const hrId = searchParams.get("hr");
+    const hiringManagerId = searchParams.get("hr");
+    const page = searchParams.get("page");
+    const limit = searchParams.get("limit");
 
-    if (!hrId) {
-      return NextResponse.json(
-        { success: false, error: "HR ID is required in query params" },
-        { status: 400 }
-      );
-    }
-
-    const parsed = JobRoleQuerySchema.safeParse({ hr: hrId });
-
+    const parsed = JobRoleQuerySchema.safeParse({ hiringManagerId, page, limit });
     if (!parsed.success) {
       return NextResponse.json(
         {
           success: false,
           error: "Validation failed",
-          issues: parsed.error.flatten().fieldErrors,
+          details: parsed.error.flatten().fieldErrors,
         },
         { status: 400 }
       );
     }
 
-    const jobRoles = await JobRoleModel.find({ hiringManager: hrId })
-      .sort({ updatedAt: -1 })
-      .lean();
+    const { hiringManagerId: validatedHiringManagerId, page: validatedPage, limit: validatedLimit } = parsed.data;
+
+    const jobs = await Job.aggregate([
+      // Match jobs by hiringManagerId
+      {
+        $match: {
+          hiringManagerId: new mongoose.Types.ObjectId(validatedHiringManagerId),
+        },
+      },
+      // Lookup Department
+      {
+        $lookup: {
+          from: "departments",
+          localField: "departmentId",
+          foreignField: "_id",
+          as: "departmentId",
+        },
+      },
+      // Unwind departmentId to single object
+      {
+        $unwind: {
+          path: "$departmentId",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      // Project only department name
+      {
+        $addFields: {
+          departmentId: { _id: "$departmentId._id", name: "$departmentId.name" },
+        },
+      },
+      // Lookup HiringPipeline
+      {
+        $lookup: {
+          from: "hiringpipelines",
+          localField: "hiringPipelineId",
+          foreignField: "_id",
+          as: "hiringPipelineId",
+        },
+      },
+      // Unwind hiringPipelineId
+      {
+        $unwind: {
+          path: "$hiringPipelineId",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      // Lookup User for createdById in HiringPipeline
+      {
+        $lookup: {
+          from: "users",
+          localField: "hiringPipelineId.createdById",
+          foreignField: "_id",
+          as: "hiringPipelineId.createdById",
+        },
+      },
+      // Unwind createdById
+      {
+        $unwind: {
+          path: "$hiringPipelineId.createdById",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      // Project createdById fields
+      {
+        $addFields: {
+          "hiringPipelineId.createdById": {
+            _id: "$hiringPipelineId.createdById._id",
+            name: "$hiringPipelineId.createdById.name",
+            email: "$hiringPipelineId.createdById.email",
+          },
+        },
+      },
+      // Lookup JobSkill
+      {
+        $lookup: {
+          from: "jobskills",
+          localField: "_id",
+          foreignField: "jobId",
+          as: "requiredSkills",
+        },
+      },
+      // Project requiredSkills as array of skill strings
+      {
+        $addFields: {
+          requiredSkills: {
+            $map: {
+              input: "$requiredSkills",
+              as: "skill",
+              in: "$$skill.skill",
+            },
+          },
+        },
+      },
+      // Sort by _id descending
+      {
+        $sort: { _id: -1 },
+      },
+      // Pagination
+      {
+        $skip: (validatedPage - 1) * validatedLimit,
+      },
+      {
+        $limit: validatedLimit,
+      },
+    ]).exec();
 
     return NextResponse.json(
       {
         success: true,
-        data: jobRoles,
-        message: "Job roles fetched successfully",
+        data: jobs,
+        message: "Jobs fetched successfully",
       },
       { status: 200 }
     );
-  } catch (error) {
-    return NextResponse.json(handleError(error), { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json(
+      handleError(error),
+      { status: error instanceof Error ? 400 : 500 }
+    );
   }
 }

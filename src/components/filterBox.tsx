@@ -9,6 +9,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
 type Checked = DropdownMenuCheckboxItemProps["checked"];
 
 const Filter = ({
@@ -29,9 +30,11 @@ const Filter = ({
   );
 };
 
-const FilterBox = () => {
-  const [nameFilter, setNameFilter] = React.useState<Checked>(false);
-  const [dateFilter, setDateFilter] = React.useState<Checked>(false);
+const FilterBox = ({
+  onFilterChange,
+}: {
+  onFilterChange: (filters: { status: string[]; workType: string[] }) => void;
+}) => {
   const [statusOpenFilter, setStatusOpenFilter] =
     React.useState<Checked>(false);
   const [statusClosedFilter, setStatusClosedFilter] =
@@ -46,8 +49,37 @@ const FilterBox = () => {
     React.useState<Checked>(false);
   const [workHybridFilter, setWorkHybridFilter] =
     React.useState<Checked>(false);
+
+  // Update parent component with selected filters
+  React.useEffect(() => {
+    const newStatusFilters = [];
+    if (statusOpenFilter) newStatusFilters.push("open");
+    if (statusClosedFilter) newStatusFilters.push("closed");
+    if (statusDraftFilter) newStatusFilters.push("draft");
+    if (statusCancelledFilter) newStatusFilters.push("cancelled");
+
+    const newWorkTypeFilters = [];
+    if (workRemoteFilter) newWorkTypeFilters.push("remote");
+    if (workOnsiteFilter) newWorkTypeFilters.push("on-site");
+    if (workHybridFilter) newWorkTypeFilters.push("hybrid");
+
+    onFilterChange({
+      status: newStatusFilters,
+      workType: newWorkTypeFilters,
+    });
+  }, [
+    statusOpenFilter,
+    statusClosedFilter,
+    statusDraftFilter,
+    statusCancelledFilter,
+    workRemoteFilter,
+    workOnsiteFilter,
+    workHybridFilter,
+    onFilterChange,
+  ]);
+
   return (
-    <div className="w-max h-full flex items-center justify-cente gap-2">
+    <div className="w-max h-full flex items-center justify-center gap-2">
       <DropdownMenu>
         <DropdownMenuTrigger asChild className="border-0">
           <div className="w-max h-max p-1 px-3 rounded-2xl border-2 text-zinc-300 text-sm bg-zinc-800 border-zinc-800">
@@ -55,7 +87,6 @@ const FilterBox = () => {
           </div>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-32 bg-zinc-900 rounded-xl border-0">
-          {/* -------WorkType------------ */}
           <DropdownMenuLabel className="text-zinc-700 text-xs">
             WorkType
           </DropdownMenuLabel>
@@ -77,7 +108,6 @@ const FilterBox = () => {
           >
             Hybrid
           </DropdownMenuCheckboxItem>
-          {/* ---------------status-------------- */}
           <DropdownMenuLabel className="text-zinc-700 text-xs">
             Status
           </DropdownMenuLabel>
@@ -107,6 +137,30 @@ const FilterBox = () => {
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {/* Display active filters */}
+      {[
+        ...(statusOpenFilter ? ["open"] : []),
+        ...(statusClosedFilter ? ["closed"] : []),
+        ...(statusDraftFilter ? ["draft"] : []),
+        ...(statusCancelledFilter ? ["cancelled"] : []),
+        ...(workRemoteFilter ? ["remote"] : []),
+        ...(workOnsiteFilter ? ["on-site"] : []),
+        ...(workHybridFilter ? ["hybrid"] : []),
+      ].map((filter) => (
+        <Filter
+          key={filter}
+          filter={filter}
+          onClick={() => {
+            if (filter === "open") setStatusOpenFilter(false);
+            if (filter === "closed") setStatusClosedFilter(false);
+            if (filter === "draft") setStatusDraftFilter(false);
+            if (filter === "cancelled") setStatusCancelledFilter(false);
+            if (filter === "remote") setWorkRemoteFilter(false);
+            if (filter === "on-site") setWorkOnsiteFilter(false);
+            if (filter === "hybrid") setWorkHybridFilter(false);
+          }}
+        />
+      ))}
     </div>
   );
 };
