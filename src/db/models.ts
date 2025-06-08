@@ -40,9 +40,9 @@ export enum ContractType {
 }
 
 export enum PipelineStatus {
-  Upcoming = "upcoming",
-  Ongoing = "ongoing",
-  Completed = "completed",
+  Draft = "draft",
+  Active = "active",
+  Suspended = "suspended",
 }
 
 export enum StageStatus {
@@ -80,6 +80,7 @@ export enum Permission {
   ManageTeams = "manage_teams",
   ViewReports = "view_reports",
   AssignInterviews = "assign_interviews",
+  EditPipeline = "edit_pipelines",
 }
 
 export enum JobStatus {
@@ -108,6 +109,7 @@ export enum TargetType {
   Attachment = "attachment",
   Team = "team",
   Department = "department",
+  HiringPipeline = "hiringPipeline",
 }
 
 export enum NoteType {
