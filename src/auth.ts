@@ -53,6 +53,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         credentials: Partial<Record<"identifier" | "password", unknown>>
       ) => {
         try {
+          console.log(credentials);
           if (
             typeof credentials?.identifier !== "string" ||
             typeof credentials?.password !== "string"

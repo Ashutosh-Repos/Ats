@@ -110,7 +110,7 @@ const Login = () => {
             </Link>
             <Button
               type="submit"
-              className="cursor-pointer bg-zinc-900 dark:bg-zinc-200"
+              className="cursor-pointer dark:bg-white dark:text-black bg-black text-white"
               disabled={form.formState.isSubmitting}
             >
               {form.formState.isSubmitting ? "Submitting..." : "Submit"}
@@ -118,7 +118,7 @@ const Login = () => {
           </div>
           <Link href={`register`}>
             <p className="w-full text-center text-xs text-zinc-500 dark:text-zinc-300 hover:underline">
-              Register new user
+              Register New User
             </p>
           </Link>
         </form>

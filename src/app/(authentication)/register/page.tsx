@@ -9,23 +9,16 @@ import { signIn } from "next-auth/react";
 import { z } from "zod";
 import { toast } from "sonner";
 
-import { userSchema } from "@/zod/userSchema";
-
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
+  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@radix-ui/react-select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   IconBrandGoogleFilled,
   IconBrandGithubFilled,
@@ -36,7 +29,6 @@ import { Separator } from "@/components/ui/separator";
 // import { registerValidation } from "@/zod/zodFormSchemas/authFormValidation";
 import Link from "next/link";
 import {
-  ageValidation,
   emailValidation,
   nameValidation,
   passwordValidation,
@@ -48,7 +40,7 @@ const registerValidation = z.object({
   email: emailValidation,
   password: passwordValidation,
   confirmPassword: passwordValidation,
-  roleName: z.nativeEnum(RoleName).optional(),
+  roleName: z.string(),
 });
 
 const Register = () => {
@@ -59,7 +51,7 @@ const Register = () => {
       email: "",
       password: "",
       confirmPassword: "",
-      roleName: RoleName.HiringManager,
+      roleName: "hiringManager",
     },
     mode: "onChange",
   });
@@ -91,7 +83,7 @@ const Register = () => {
   return (
     <Form {...form}>
       <form
-        className="w-full max-w-96 gap-4 flex flex-col h-max p-4 border-0 rounded-2xl relative bg-transparent backdrop-blur-sm"
+        className="w-full max-w-96 gap-4 flex flex-col h-max p-4 border-0 rounded-2xl relative bg-zinc-200 dark:bg-zinc-900 backdrop-blur-sm"
         onSubmit={form.handleSubmit(onSubmit)}
       >
         <h1 className="w-full text-center text-xl font-bold">Register</h1>
@@ -116,7 +108,10 @@ const Register = () => {
           control={form.control}
           name="name"
           render={({ field }) => (
-            <FormItem className="relative">
+            <FormItem>
+              <FormLabel>
+                <h1 className="text-sm text-zinc-500">Name</h1>
+              </FormLabel>
               <FormControl>
                 <Input placeholder="fullname" {...field} type={`text`} />
               </FormControl>
@@ -129,6 +124,9 @@ const Register = () => {
           name="email"
           render={({ field }) => (
             <FormItem className="relative">
+              <FormLabel>
+                <h1 className="text-sm text-zinc-500">E-mail</h1>
+              </FormLabel>
               <FormControl>
                 <Input placeholder="email" {...field} type={`email`} />
               </FormControl>
@@ -136,40 +134,47 @@ const Register = () => {
             </FormItem>
           )}
         />
-        {/* <div className="flex items-center space-x-2">
-          <FormField
-            control={form.control}
-            name="age"
-            render={({ field }) => (
-              <FormItem className="relative">
-                <FormControl>
-                  <Input placeholder="age" {...field} type={`number`} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          /> 
-        </div>*/}
+
         <FormField
           control={form.control}
           name="roleName"
           render={({ field }) => (
             <FormItem>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value={RoleName.HiringManager}>
-                    Hiring Manager
-                  </SelectItem>
-                  <SelectItem value={RoleName.Interviewer}>
-                    Interviewer
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <FormLabel>
+                <h1 className="text-sm text-zinc-500">Sign in as</h1>
+              </FormLabel>
+              <FormControl>
+                <RadioGroup
+                  onValueChange={field.onChange}
+                  defaultValue={field.value}
+                  className="flex text-white"
+                >
+                  <FormItem className="flex items-center gap-3">
+                    <FormControl>
+                      <RadioGroupItem value="hiringManager" />
+                    </FormControl>
+                    <FormLabel className="font-light text-xs text-zinc-500">
+                      Hiring Manager
+                    </FormLabel>
+                  </FormItem>
+                  <FormItem className="flex items-center gap-3">
+                    <FormControl>
+                      <RadioGroupItem value="interviewer" />
+                    </FormControl>
+                    <FormLabel className="font-light text-xs text-zinc-500">
+                      Interviewer
+                    </FormLabel>
+                  </FormItem>
+                  <FormItem className="flex items-center gap-3">
+                    <FormControl>
+                      <RadioGroupItem value="admin" />
+                    </FormControl>
+                    <FormLabel className="font-light text-xs text-zinc-500">
+                      Admin
+                    </FormLabel>
+                  </FormItem>
+                </RadioGroup>
+              </FormControl>
             </FormItem>
           )}
         />
@@ -178,6 +183,9 @@ const Register = () => {
           name="password"
           render={({ field }) => (
             <FormItem className="relative">
+              <FormLabel>
+                <h1 className="text-sm text-zinc-500">Password</h1>
+              </FormLabel>
               <FormControl>
                 <Input placeholder="password" {...field} type={`password`} />
               </FormControl>
@@ -209,10 +217,10 @@ const Register = () => {
           </Link>
           <Button
             type="submit"
-            className="cursor-pointer"
+            className="cursor-pointer bg-white text-black"
             disabled={form.formState.isSubmitting}
           >
-            {form.formState.isSubmitting ? "Submitting..." : "Submit"}
+            {form.formState.isSubmitting ? "Registering..." : "Register"}
           </Button>
         </div>
       </form>

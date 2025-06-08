@@ -204,8 +204,6 @@ const UserSchema = new Schema<IUser>(
   { timestamps: true }
 );
 
-UserSchema.index({ email: 1 });
-
 /**
  * Validates that the roleId exists before saving.
  */
@@ -245,8 +243,6 @@ const CredentialSchema = new Schema<ICredential>(
   },
   { timestamps: true }
 );
-
-CredentialSchema.index({ userId: 1 }, { unique: true });
 
 /**
  * Validates that the userId exists before saving.
@@ -829,7 +825,6 @@ const CandidateSchema = new Schema<ICandidate>(
   { timestamps: true }
 );
 
-CandidateSchema.index({ email: 1 }, { unique: true });
 CandidateSchema.index({ referralTokenId: 1 });
 CandidateSchema.index({ name: 1 });
 
@@ -984,7 +979,6 @@ const ReferralTokenSchema = new Schema<IReferralToken>(
   { timestamps: true }
 );
 
-ReferralTokenSchema.index({ token: 1 }, { unique: true });
 ReferralTokenSchema.index({ referredById: 1 });
 ReferralTokenSchema.index({ jobId: 1 });
 ReferralTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
