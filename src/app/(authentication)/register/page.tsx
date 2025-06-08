@@ -9,6 +9,8 @@ import { signIn } from "next-auth/react";
 import { z } from "zod";
 import { toast } from "sonner";
 
+import { userSchema } from "@/zod/userSchema";
+
 import {
   Form,
   FormControl,
@@ -17,6 +19,13 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@radix-ui/react-select";
 import {
   IconBrandGoogleFilled,
   IconBrandGithubFilled,
@@ -32,13 +41,14 @@ import {
   nameValidation,
   passwordValidation,
 } from "@/zod/commonValidations";
+import { RoleName } from "@/db/models";
 
 const registerValidation = z.object({
   name: nameValidation,
   email: emailValidation,
   password: passwordValidation,
   confirmPassword: passwordValidation,
-  age: ageValidation,
+  roleName: z.nativeEnum(RoleName).optional(),
 });
 
 const Register = () => {
@@ -49,7 +59,7 @@ const Register = () => {
       email: "",
       password: "",
       confirmPassword: "",
-      age: 0,
+      roleName: RoleName.HiringManager,
     },
     mode: "onChange",
   });
@@ -126,7 +136,7 @@ const Register = () => {
             </FormItem>
           )}
         />
-        <div className="flex items-center space-x-2">
+        {/* <div className="flex items-center space-x-2">
           <FormField
             control={form.control}
             name="age"
@@ -138,8 +148,31 @@ const Register = () => {
                 <FormMessage />
               </FormItem>
             )}
-          />
-        </div>
+          /> 
+        </div>*/}
+        <FormField
+          control={form.control}
+          name="roleName"
+          render={({ field }) => (
+            <FormItem>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value={RoleName.HiringManager}>
+                    Hiring Manager
+                  </SelectItem>
+                  <SelectItem value={RoleName.Interviewer}>
+                    Interviewer
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </FormItem>
+          )}
+        />
         <FormField
           control={form.control}
           name="password"

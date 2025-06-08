@@ -28,7 +28,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (!token?.verified) {
+  if (!token || !(token.status === "verified")) {
     const verifyUrl = req.nextUrl.clone();
     verifyUrl.pathname = "/verify";
     return NextResponse.redirect(verifyUrl);

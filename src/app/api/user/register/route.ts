@@ -48,12 +48,14 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     await connectToDatabase();
 
     const body = await request.json();
-    const { email, password, age, name } = await userSchema.parseAsync(body);
+    const { email, password, name, roleName } =
+      await userSchema.parseAsync(body);
     if (!password || !password.trim()) throw new Error("Password is required");
 
     // Find default role (e.g., hiringManager)
-    const role = await Role.findOne({ name: "hiringManager" });
-    if (!role) throw new Error("Default role not found");
+
+    const role = await Role.findOne({ name: roleName });
+    if (!role) throw new Error(`${roleName} role not found`);
 
     // Check for existing user
     const existingUser = await User.findOne({ email });
@@ -95,7 +97,6 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     const newUser = await User.create({
       name,
       email,
-      age,
       roleId: role._id,
       status: "unverified",
       joiningDate: new Date(),

@@ -1,14 +1,12 @@
-// import NextAuth, { CredentialsSignin } from "next-auth";
 import NextAuth, { type User, type DefaultSession } from "next-auth";
 import GitHub from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcrypt-edge";
-import { UserModel } from "./db/models/Users";
-import { Iuser } from "./db/models/Users";
+import { User as UserModel, Credential, Role } from "@/db/models";
+import { IUser } from "@/db/models";
 import { connectToDatabase } from "./db/connection/dbConnect";
 import { emailValidation, passwordValidation } from "@/zod/commonValidations";
-
 import { ZodError } from "zod";
 
 declare module "next-auth" {
@@ -17,7 +15,7 @@ declare module "next-auth" {
       id: string;
       email: string;
       role: string;
-      verified: boolean;
+      status: string;
       avatar?: string | undefined;
     } & DefaultSession["user"];
   }
@@ -25,7 +23,7 @@ declare module "next-auth" {
   interface User {
     id: string;
     email: string;
-    verified: boolean;
+    status: string;
     avatar?: string | undefined;
     role: string;
   }
@@ -33,11 +31,12 @@ declare module "next-auth" {
   interface JWT {
     id: string;
     email: string;
-    verified: boolean;
+    status: string;
     avatar?: string | undefined;
     role: string;
   }
 }
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
   providers: [
@@ -78,14 +77,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           console.log(4);
 
-          const user = await UserModel.findOne<Iuser>({
-            $and: [{ verified: true }, { email: identifier }],
-          });
+          const user = await UserModel.findOne<IUser>({
+            $and: [{ status: "verified" }, { email: identifier }],
+          }).populate("roleId");
           console.log(user);
           if (!user) throw new Error("not registered");
-          if (!user?.password) throw new Error("password less, use oAuths");
 
-          const isValidPassword = bcrypt.compareSync(password, user.password);
+          const credential = await Credential.findOne({ userId: user._id });
+          if (!credential || !credential.password)
+            throw new Error("password less, use oAuths");
+
+          const isValidPassword = bcrypt.compareSync(
+            password,
+            credential.password
+          );
           console.log(isValidPassword);
           if (!isValidPassword) throw new Error("invalid credentials");
 
@@ -93,8 +98,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const userData: User = {
             email: user.email as string,
             id: user._id.toString() as string,
-            verified: user.verified as boolean,
-            role: user.role as string,
+            status: user.status as string,
+            role: user.roleId ? (user.roleId as any).name : "unknown",
+            avatar: user.avatar,
           };
 
           console.log("8");
@@ -118,14 +124,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   callbacks: {
     async redirect({ baseUrl }) {
-      return baseUrl; // ✅ this is correct
+      return baseUrl;
     },
     async session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
         session.user.email = token.email as string;
-        session.user.verified = token.verified as boolean;
+        session.user.status = token.status as string;
         session.user.avatar = token.avatar as string;
       }
       return session;
@@ -135,68 +141,69 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.id = (user as User).id;
         token.role = (user as User).role;
         token.email = (user as User).email;
-        token.verified = (user as User).verified;
+        token.status = (user as User).status;
         token.avatar = (user as User).avatar;
       }
       return token;
     },
-
     async signIn({ user, account }) {
       if (!account) return false;
 
       console.log(user);
 
       if (account.provider === "credentials") {
-        // Skip registration logic for credentials
         return true;
       }
 
-      // OAuth logic (Google, GitHub, etc.)
       await connectToDatabase();
 
-      const existingUser = await UserModel.findOne<Iuser>({
+      const existingUser = await UserModel.findOne<IUser>({
         email: user.email,
-      });
+      }).populate("roleId");
 
       if (!existingUser) {
-        const newUser: Iuser = await UserModel.create<Iuser>({
+        const defaultRole = await Role.findOne({ name: "hiringManager" });
+        if (!defaultRole) throw new Error("Default role not found");
+
+        const newUserDoc = await UserModel.create({
           email: user.email,
           name: user.name ?? user.email?.split("@")[0] ?? "User",
-          role: "hr",
-          password: null,
-          verified: true,
+          roleId: defaultRole._id,
+          status: "verified",
           avatar: user.image,
-          // optionally set avatar or other fields here
+          joiningDate: new Date(),
         });
+
+        // Assert the type as IUser
+        const newUser: IUser = newUserDoc as IUser;
+
         if (!newUser) return false;
 
         user.email = newUser.email;
         user.id = newUser._id.toString();
-        user.verified = newUser.verified;
+        user.status = newUser.status;
         user.avatar = newUser.avatar;
-        user.role = newUser.role;
+        user.role = defaultRole.name;
 
         return true;
       }
 
       user.email = existingUser.email;
       user.id = existingUser._id.toString();
-      user.verified = existingUser.verified;
+      user.status = existingUser.status;
       user.avatar = existingUser.avatar;
-      user.role = existingUser.role;
+      user.role = existingUser.roleId
+        ? (existingUser.roleId as any).name
+        : "unknown";
 
       console.log(user);
 
       return true;
     },
-    // authorized: async ({ auth }) => {
-    //   return !!auth;
-    // },
   },
   session: {
     strategy: "jwt",
     maxAge: 60 * 24 * 24,
   },
-
   secret: process.env.AUTH_SECRET,
 });

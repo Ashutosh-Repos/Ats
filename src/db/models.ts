@@ -1,5 +1,5 @@
-import { Schema, Document, Types, model } from "mongoose";
-
+import mongoose, { Schema, Document, Types, model, models } from "mongoose";
+import bcrypt from "bcrypt-edge";
 // Centralized Enums
 export enum RoleName {
   Admin = "admin",
@@ -179,7 +179,8 @@ RolePermissionSchema.pre("save", async function (next) {
 });
 
 // Users Schema
-interface IUser extends Document, Timestamps {
+export interface IUser extends Document, Timestamps {
+  _id: Types.ObjectId;
   name: string;
   email: string;
   avatar?: string;
@@ -203,7 +204,7 @@ const UserSchema = new Schema<IUser>(
   { timestamps: true }
 );
 
-UserSchema.index({ email: 1 }, { unique: true });
+UserSchema.index({ email: 1 });
 
 /**
  * Validates that the roleId exists before saving.
@@ -255,6 +256,9 @@ CredentialSchema.pre("save", async function (next) {
     const credential = this as Document & ICredential;
     const user = await User.findById(credential.userId);
     if (!user) throw new Error("Invalid userId");
+    if (credential.isModified("password")) {
+      credential.password = bcrypt.hashSync(credential.password, 10);
+    }
     next();
   } catch (error: unknown) {
     next(error instanceof Error ? error : new Error("Unknown error occurred"));
@@ -530,6 +534,7 @@ JobSchema.index({ departmentId: 1 });
 JobSchema.index({ hiringManagerId: 1 });
 JobSchema.index({ hiringPipelineId: 1 });
 JobSchema.index({ _id: -1 });
+// JobSchema.index({ title: "text", jobDescription: "text" });
 
 /**
  * Validates that departmentId, hiringManagerId, and hiringPipelineId exist before saving.
@@ -572,6 +577,17 @@ JobSchema.pre(
     }
   }
 );
+
+JobSchema.post("save", async function (doc: Document & IJob) {
+  await ActivityLog.create({
+    actorId: doc.hiringManagerId,
+    action: Action.Create,
+    targetType: TargetType.Job,
+    targetId: doc._id,
+    details: `Created job: ${doc.title}`,
+    timestamp: new Date(),
+  });
+});
 
 // Job Skills Schema
 interface IJobSkill extends Document, Timestamps {
@@ -815,6 +831,7 @@ const CandidateSchema = new Schema<ICandidate>(
 
 CandidateSchema.index({ email: 1 }, { unique: true });
 CandidateSchema.index({ referralTokenId: 1 });
+CandidateSchema.index({ name: 1 });
 
 /**
  * Validates referralTokenId and status transitions before saving.
@@ -1421,53 +1438,54 @@ ActivityLogSchema.pre("save", async function (next) {
 });
 
 // Export Mongoose Models
-export const Role = model<IRole>("Role", RoleSchema);
-export const RolePermission = model<IRolePermission>(
-  "RolePermission",
-  RolePermissionSchema
-);
-export const User = model<IUser>("User", UserSchema);
-export const Credential = model<ICredential>("Credential", CredentialSchema);
-export const Team = model<ITeam>("Team", TeamSchema);
-export const TeamRole = model<ITeamRole>("TeamRole", TeamRoleSchema);
-export const TeamMember = model<ITeamMember>("TeamMember", TeamMemberSchema);
-export const Department = model<IDepartment>("Department", DepartmentSchema);
-export const Job = model<IJob>("Job", JobSchema);
-export const JobSkill = model<IJobSkill>("JobSkill", JobSkillSchema);
-export const HiringPipeline = model<IHiringPipeline>(
-  "HiringPipeline",
-  HiringPipelineSchema
-);
-export const HiringStage = model<IHiringStage>(
-  "HiringStage",
-  HiringStageSchema
-);
-export const Candidate = model<ICandidate>("Candidate", CandidateSchema);
-export const JobApplication = model<IJobApplication>(
-  "JobApplication",
-  JobApplicationSchema
-);
-export const ReferralToken = model<IReferralToken>(
-  "ReferralToken",
-  ReferralTokenSchema
-);
-export const CandidateSkill = model<ICandidateSkill>(
-  "CandidateSkill",
-  CandidateSkillSchema
-);
-export const StageParticipant = model<IStageParticipant>(
-  "StageParticipant",
-  StageParticipantSchema
-);
-export const InterviewParticipant = model<IInterviewParticipant>(
-  "InterviewParticipant",
-  InterviewParticipantSchema
-);
-export const Interview = model<IInterview>("Interview", InterviewSchema);
-export const Checklist = model<IChecklist>("Checklist", ChecklistSchema);
-export const Note = model<INote>("Note", NoteSchema);
-export const Attachment = model<IAttachment>("Attachment", AttachmentSchema);
-export const ActivityLog = model<IActivityLog>(
-  "ActivityLog",
-  ActivityLogSchema
-);
+export const Role = models.Role || model<IRole>("Role", RoleSchema);
+export const RolePermission =
+  models.RolePermission ||
+  model<IRolePermission>("RolePermission", RolePermissionSchema);
+export const User = models.User || model<IUser>("User", UserSchema);
+export const Credential =
+  models.Credential || model<ICredential>("Credential", CredentialSchema);
+export const Team = models.Team || model<ITeam>("Team", TeamSchema);
+export const TeamRole =
+  models.TeamRole || model<ITeamRole>("TeamRole", TeamRoleSchema);
+export const TeamMember =
+  models.TeamMember || model<ITeamMember>("TeamMember", TeamMemberSchema);
+export const Department =
+  models.Department || model<IDepartment>("Department", DepartmentSchema);
+export const Job = models.Job || model<IJob>("Job", JobSchema);
+export const JobSkill =
+  models.JobSkill || model<IJobSkill>("JobSkill", JobSkillSchema);
+export const HiringPipeline =
+  models.HiringPipeline ||
+  model<IHiringPipeline>("HiringPipeline", HiringPipelineSchema);
+export const HiringStage =
+  models.HiringStage || model<IHiringStage>("HiringStage", HiringStageSchema);
+export const Candidate =
+  models.Candidate || model<ICandidate>("Candidate", CandidateSchema);
+export const JobApplication =
+  models.JobApplication ||
+  model<IJobApplication>("JobApplication", JobApplicationSchema);
+export const ReferralToken =
+  models.ReferralToken ||
+  model<IReferralToken>("ReferralToken", ReferralTokenSchema);
+export const CandidateSkill =
+  models.CandidateSkill ||
+  model<ICandidateSkill>("CandidateSkill", CandidateSkillSchema);
+export const StageParticipant =
+  models.StageParticipant ||
+  model<IStageParticipant>("StageParticipant", StageParticipantSchema);
+export const InterviewParticipant =
+  models.InterviewParticipant ||
+  model<IInterviewParticipant>(
+    "InterviewParticipant",
+    InterviewParticipantSchema
+  );
+export const Interview =
+  models.Interview || model<IInterview>("Interview", InterviewSchema);
+export const Checklist =
+  models.Checklist || model<IChecklist>("Checklist", ChecklistSchema);
+export const Note = models.Note || model<INote>("Note", NoteSchema);
+export const Attachment =
+  models.Attachment || model<IAttachment>("Attachment", AttachmentSchema);
+export const ActivityLog =
+  models.ActivityLog || model<IActivityLog>("ActivityLog", ActivityLogSchema);

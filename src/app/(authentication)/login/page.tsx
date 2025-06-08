@@ -116,7 +116,7 @@ const Login = () => {
               {form.formState.isSubmitting ? "Submitting..." : "Submit"}
             </Button>
           </div>
-          <Link href={`sign-up`}>
+          <Link href={`register`}>
             <p className="w-full text-center text-xs text-zinc-500 dark:text-zinc-300 hover:underline">
               Register new user
             </p>
