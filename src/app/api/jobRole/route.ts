@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Job, HiringPipeline, JobSkill, User, Department, WorkType, ContractType } from "@/db/models"; // Import models and enums
+import {
+  Job,
+  HiringPipeline,
+  JobSkill,
+  User,
+  Department,
+  WorkType,
+  ContractType,
+} from "@/db/models"; // Import models and enums
 import { connectToDatabase } from "@/db/connection/dbConnect";
 import { z } from "zod";
 import mongoose from "mongoose";
@@ -41,18 +49,35 @@ const JobRoleCreateSchema = z
         "Invalid pipeline ID"
       ),
     title: z.string().min(1, "Job title is required").trim(),
-    workType: z.enum(Object.values(WorkType) as [string, ...string[]]).optional(),
+    workType: z
+      .enum(Object.values(WorkType) as [string, ...string[]])
+      .optional(),
     workLocation: z.string().min(1, "Work location is required").trim(),
-    contract: z.enum(Object.values(ContractType) as [string, ...string[]]).optional(),
-    headCount: z.number().int().positive("Head count must be positive").optional(),
-    minimumSalary: z.number().nonnegative("Minimum salary must be non-negative").optional(),
-    maximumSalary: z.number().nonnegative("Maximum salary must be non-negative").optional(),
+    contract: z
+      .enum(Object.values(ContractType) as [string, ...string[]])
+      .optional(),
+    headCount: z
+      .number()
+      .int()
+      .positive("Head count must be positive")
+      .optional(),
+    minimumSalary: z
+      .number()
+      .nonnegative("Minimum salary must be non-negative")
+      .optional(),
+    maximumSalary: z
+      .number()
+      .nonnegative("Maximum salary must be non-negative")
+      .optional(),
     jobDescription: z.string().optional(),
     requiredSkills: z.array(z.string().trim()).optional(),
   })
   .strict()
   .refine(
-    (data) => !data.maximumSalary || !data.minimumSalary || data.maximumSalary >= data.minimumSalary,
+    (data) =>
+      !data.maximumSalary ||
+      !data.minimumSalary ||
+      data.maximumSalary >= data.minimumSalary,
     {
       message: "Maximum salary must be greater than or equal to minimum salary",
       path: ["maximumSalary"],
@@ -67,13 +92,13 @@ const JobRoleQuerySchema = z.object({
       (id) => mongoose.Types.ObjectId.isValid(id),
       "Invalid hiring manager ID"
     ),
-  page: z.string().regex(/^\d+$/, "Page must be a positive integer").optional().transform(Number).default(1),
-  limit: z.string().regex(/^\d+$/, "Limit must be a positive integer").optional().transform(Number).default(10),
+  page: z.number().int().positive().default(1),
+  limit: z.number().int().positive().default(10),
 });
 
 // ----------- Utilities -----------
 
-const handleError = (error: unknown): ApiResponse<never> {
+const handleError = (error: unknown): ApiResponse<never> => {
   console.error("Error:", error);
   if (error instanceof mongoose.Error.ValidationError) {
     return {
@@ -100,7 +125,8 @@ const handleError = (error: unknown): ApiResponse<never> {
   }
   return {
     success: false,
-    error: error instanceof Error ? error.message : "An unexpected error occurred",
+    error:
+      error instanceof Error ? error.message : "An unexpected error occurred",
   };
 };
 
@@ -157,7 +183,9 @@ export async function POST(
       throw new Error("Invalid pipeline ID.");
     }
     if (pipeline.createdById.toString() !== hiringManagerId) {
-      throw new Error("Pipeline does not belong to the specified hiring manager.");
+      throw new Error(
+        "Pipeline does not belong to the specified hiring manager."
+      );
     }
 
     // Create job
@@ -176,10 +204,11 @@ export async function POST(
     });
 
     // Create job skills
-    const skills = requiredSkills?.map((skill) => ({
-      jobId: job._id,
-      skill,
-    })) ?? [];
+    const skills =
+      requiredSkills?.map((skill) => ({
+        jobId: job._id,
+        skill,
+      })) ?? [];
     if (skills.length) {
       await JobSkill.insertMany(skills);
     }
@@ -193,10 +222,9 @@ export async function POST(
       { status: 201 }
     );
   } catch (error: unknown) {
-    return NextResponse.json(
-      handleError(error),
-      { status: error instanceof Error ? 400 : 500 }
-    );
+    return NextResponse.json(handleError(error), {
+      status: error instanceof Error ? 400 : 500,
+    });
   }
 }
 
@@ -212,7 +240,11 @@ export async function GET(
     const page = searchParams.get("page");
     const limit = searchParams.get("limit");
 
-    const parsed = JobRoleQuerySchema.safeParse({ hiringManagerId, page, limit });
+    const parsed = JobRoleQuerySchema.safeParse({
+      hiringManagerId,
+      page,
+      limit,
+    });
     if (!parsed.success) {
       return NextResponse.json(
         {
@@ -224,13 +256,19 @@ export async function GET(
       );
     }
 
-    const { hiringManagerId: validatedHiringManagerId, page: validatedPage, limit: validatedLimit } = parsed.data;
+    const {
+      hiringManagerId: validatedHiringManagerId,
+      page: validatedPage,
+      limit: validatedLimit,
+    } = parsed.data;
 
     const jobs = await Job.aggregate([
       // Match jobs by hiringManagerId
       {
         $match: {
-          hiringManagerId: new mongoose.Types.ObjectId(validatedHiringManagerId),
+          hiringManagerId: new mongoose.Types.ObjectId(
+            validatedHiringManagerId
+          ),
         },
       },
       // Lookup Department
@@ -252,7 +290,10 @@ export async function GET(
       // Project only department name
       {
         $addFields: {
-          departmentId: { _id: "$departmentId._id", name: "$departmentId.name" },
+          departmentId: {
+            _id: "$departmentId._id",
+            name: "$departmentId.name",
+          },
         },
       },
       // Lookup HiringPipeline
@@ -340,9 +381,8 @@ export async function GET(
       { status: 200 }
     );
   } catch (error: unknown) {
-    return NextResponse.json(
-      handleError(error),
-      { status: error instanceof Error ? 400 : 500 }
-    );
+    return NextResponse.json(handleError(error), {
+      status: error instanceof Error ? 400 : 500,
+    });
   }
 }

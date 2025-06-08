@@ -82,6 +82,13 @@ export enum Permission {
   AssignInterviews = "assign_interviews",
 }
 
+export enum JobStatus {
+  Draft = "draft",
+  Open = "open",
+  Closed = "closed",
+  Cancelled = "cancelled",
+}
+
 export enum Action {
   Create = "create",
   Update = "update",
@@ -455,6 +462,7 @@ interface IJob extends Document, Timestamps {
   headCount: number;
   minimumSalary: number;
   maximumSalary: number;
+  status: JobStatus;
   jobDescription: string;
 }
 
@@ -463,11 +471,15 @@ interface IJob extends Document, Timestamps {
  */
 const JobSchema = new Schema<IJob>(
   {
-    title: { type: String, required: true },
+    title: {
+      type: String,
+      required: [true, "Job title is required"],
+      trim: true,
+    },
     departmentId: {
       type: Schema.Types.ObjectId,
       ref: "Department",
-      required: true,
+      required: [true, "Department ID is required"],
     },
     hiringManagerId: {
       type: Schema.Types.ObjectId,
@@ -479,12 +491,18 @@ const JobSchema = new Schema<IJob>(
       ref: "HiringPipeline",
       required: true,
     },
-    workType: { type: String, enum: Object.values(WorkType), required: true },
+    workType: {
+      type: String,
+      enum: Object.values(WorkType),
+      required: true,
+      default: WorkType.Onsite,
+    },
     workLocation: { type: String, required: true },
     contract: {
       type: String,
       enum: Object.values(ContractType),
       required: true,
+      default: ContractType.FullTime,
     },
     headCount: { type: Number, required: true },
     minimumSalary: { type: Number, required: true },
@@ -498,6 +516,11 @@ const JobSchema = new Schema<IJob>(
         message: "maximumSalary must be greater than or equal to minimumSalary",
       },
     },
+    status: {
+      type: String,
+      enum: Object.values(JobStatus),
+      default: JobStatus.Draft,
+    },
     jobDescription: { type: String, required: true },
   },
   { timestamps: true }
@@ -506,6 +529,7 @@ const JobSchema = new Schema<IJob>(
 JobSchema.index({ departmentId: 1 });
 JobSchema.index({ hiringManagerId: 1 });
 JobSchema.index({ hiringPipelineId: 1 });
+JobSchema.index({ _id: -1 });
 
 /**
  * Validates that departmentId, hiringManagerId, and hiringPipelineId exist before saving.

@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { JobRoleModel } from "@/db/models/JobRole";
+import {
+  Job,
+  JobSkill,
+  Department,
+  HiringPipeline,
+  User,
+  WorkType,
+  ContractType,
+} from "@/db/models";
 import { connectToDatabase } from "@/db/connection/dbConnect";
 import mongoose, { Types } from "mongoose";
 import { z } from "zod";
+import { MongoServerError } from "mongodb";
 
 // ----------- Types -----------
 
@@ -14,124 +23,111 @@ interface ApiResponse<T> {
   issues?: Record<string, string[]>;
 }
 
-// Type for lean JobRole (plain object without Mongoose Document methods)
-import { LeanJobRole } from "@/db/models/JobRole";
-// Type for update payload in PATCH request
-interface UpdatePayload {
-  positionTitle?: string;
-  postingDate?: Date;
-  requiredSkills?: string[];
-  jobDescription?: string;
-  pay?: number; // Add pay
-  workType?: "on-site" | "remote" | "hybrid";
-  status?: "draft" | "open" | "closed" | "cancelled";
-  hiringProcessStages?: Array<{
-    name: string;
-    description?: string;
-    isMandatory?: boolean;
-    status?: "upcoming" | "ongoing" | "completed" | "skipped" | "terminated";
-    maxCandidates?: number;
-    scheduledDate?: Date;
-    appearedCandidates?: Types.ObjectId[];
-    disqualifiedCandidates?: Types.ObjectId[];
-    qualifiedCandidates?: Types.ObjectId[];
-  }>;
-  academicQualifications?: {
-    minQualification?: string;
-    addedQualifications?: string;
-    description?: string;
+// Lean Job type with populated fields
+interface LeanJob {
+  _id: Types.ObjectId;
+  title: string;
+  departmentId: { _id: Types.ObjectId; name: string };
+  hiringManagerId: Types.ObjectId;
+  hiringPipelineId: {
+    _id: Types.ObjectId;
+    createdById: { _id: Types.ObjectId; name: string; email: string };
   };
+  workType: string;
+  workLocation: string;
+  contract: string;
+  headCount: number;
+  minimumSalary: number;
+  maximumSalary: number;
+  jobDescription: string | null;
+  status: "draft" | "open" | "closed" | "cancelled";
+  requiredSkills: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Update payload for PATCH
+interface UpdatePayload {
+  title?: string;
+  workType?: WorkType;
+  workLocation?: string;
+  contract?: string;
+  headCount?: number;
+  minimumSalary?: number;
+  maximumSalary?: number;
+  jobDescription?: string;
+  status?: "draft" | "open" | "closed" | "cancelled";
+  requiredSkills?: string[];
+  departmentId?: Types.ObjectId;
+  hiringPipelineId?: Types.ObjectId;
+  hiringManagerId?: Types.ObjectId;
 }
 
 // ----------- Zod Schema for PATCH Updates -----------
 
-const JobRoleUpdateSchema = z
+const JobUpdateSchema = z
   .object({
-    positionTitle: z
+    title: z.string().min(1, "Job title is required").trim().optional(),
+    workType: z
+      .enum(Object.values(WorkType) as [string, ...string[]])
+      .optional(),
+    workLocation: z
       .string()
-      .min(1, "Position title is required")
+      .min(1, "Work location is required")
       .trim()
       .optional(),
-    postingDate: z
+    contract: z.enum(["full-time", "part-time", "contract"]).optional(),
+    headCount: z
+      .number()
+      .int()
+      .positive("Head count must be positive")
+      .optional(),
+    minimumSalary: z
+      .number()
+      .nonnegative("Minimum salary must be non-negative")
+      .optional(),
+    maximumSalary: z
+      .number()
+      .nonnegative("Maximum salary must be non-negative")
+      .optional(),
+    jobDescription: z.string().optional(),
+    status: z.enum(["draft", "open", "closed", "cancelled"]).optional(),
+    requiredSkills: z.array(z.string().trim()).optional(),
+    departmentId: z
       .string()
       .refine(
-        (val) => !val || !isNaN(new Date(val).getTime()),
-        "Invalid posting date"
+        (id) => mongoose.Types.ObjectId.isValid(id),
+        "Invalid department ID"
       )
       .optional(),
-    requiredSkills: z.array(z.string().trim()).optional(),
-    jobDescription: z.string().optional(),
-    pay: z.number().min(0, "Pay must be non-negative").optional(),
-    workType: z.enum(["on-site", "remote", "hybrid"]).optional(),
-    minQualification: z
+    hiringPipelineId: z
       .string()
-      .min(1, "Minimum qualification is required")
-      .trim()
+      .refine(
+        (id) => mongoose.Types.ObjectId.isValid(id),
+        "Invalid pipeline ID"
+      )
       .optional(),
-    addedQualifications: z.string().optional(),
-    qualificationDescription: z.string().optional(),
-    status: z.enum(["draft", "open", "closed", "cancelled"]).optional(),
-    hiringProcessStages: z
-      .array(
-        z.object({
-          name: z.string().min(1, "Stage name is required").trim(),
-          description: z.string().optional(),
-          isMandatory: z.boolean().optional(),
-          status: z
-            .enum(["upcoming", "ongoing", "completed", "skipped", "terminated"])
-            .optional(),
-          maxCandidates: z
-            .number()
-            .min(1, "At least 1 candidate required")
-            .optional(),
-          scheduledDate: z
-            .union([
-              z
-                .string()
-                .refine(
-                  (val) => !isNaN(new Date(val).getTime()),
-                  "Invalid scheduled date"
-                ),
-              z.date(),
-            ])
-            .optional(),
-          appearedCandidates: z
-            .array(
-              z.string().refine(
-                (id) => mongoose.Types.ObjectId.isValid(id),
-                (val) => ({ message: `Invalid candidate ID: ${val}` })
-              )
-            )
-            .optional(),
-          disqualifiedCandidates: z
-            .array(
-              z.string().refine(
-                (id) => mongoose.Types.ObjectId.isValid(id),
-                (val) => ({ message: `Invalid candidate ID: ${val}` })
-              )
-            )
-            .optional(),
-          qualifiedCandidates: z
-            .array(
-              z.string().refine(
-                (id) => mongoose.Types.ObjectId.isValid(id),
-                (val) => ({ message: `Invalid candidate ID: ${val}` })
-              )
-            )
-            .optional(),
-        })
+    hiringManagerId: z
+      .string()
+      .refine(
+        (id) => mongoose.Types.ObjectId.isValid(id),
+        "Invalid hiring manager ID"
       )
       .optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (data) =>
+      !data.maximumSalary ||
+      !data.minimumSalary ||
+      data.maximumSalary >= data.minimumSalary,
+    {
+      message: "Maximum salary must be greater than or equal to minimum salary",
+      path: ["maximumSalary"],
+    }
+  );
 
 // ----------- Utilities -----------
-
-const toDate = (value?: string | Date): Date | undefined => {
-  if (!value) return undefined;
-  const date = new Date(value);
-  return isNaN(date.getTime()) ? undefined : date;
-};
 
 const handleError = (error: unknown): ApiResponse<never> => {
   console.error("Error:", error);
@@ -140,8 +136,22 @@ const handleError = (error: unknown): ApiResponse<never> => {
       success: false,
       error: "Validation error",
       issues: Object.fromEntries(
-        Object.values(error.errors).map((err) => [err.path, [err.message]])
+        Object.entries(error.errors).map(([path, err]) => [path, [err.message]])
       ),
+    };
+  }
+  if (error instanceof MongoServerError) {
+    if (error.code === 11000) {
+      return {
+        success: false,
+        error: "Duplicate key error",
+        issues: { general: ["A job with these details already exists"] },
+      };
+    }
+    return {
+      success: false,
+      error: "Database error",
+      issues: { general: [error.message] },
     };
   }
   return {
@@ -150,26 +160,121 @@ const handleError = (error: unknown): ApiResponse<never> => {
   };
 };
 
-// ---- GET Job Role by ID ----
+// Mock authentication (replace with actual JWT verification)
+const verifyAuth = async (req: NextRequest): Promise<string> => {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) throw new Error("Unauthorized");
+  // Replace with actual JWT logic
+  return "60d5f4832f8fb814b56fa2b4"; // Mock user ID
+};
+
+// ---- GET Job by ID ----
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-): Promise<NextResponse<ApiResponse<LeanJobRole>>> {
+): Promise<NextResponse<ApiResponse<LeanJob>>> {
   try {
     await connectToDatabase();
     const { id } = await params;
+    const userId = await verifyAuth(req);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
-        { success: false, error: "Invalid Job Role ID" },
+        { success: false, error: "Invalid Job ID" },
         { status: 400 }
       );
     }
 
-    const jobRole = await JobRoleModel.findById(id).lean<LeanJobRole>();
-    if (!jobRole) {
+    const jobs = await Job.aggregate([
+      {
+        $match: {
+          _id: new mongoose.Types.ObjectId(id),
+          hiringManagerId: new mongoose.Types.ObjectId(userId),
+        },
+      },
+      {
+        $lookup: {
+          from: "departments",
+          localField: "departmentId",
+          foreignField: "_id",
+          as: "departmentId",
+        },
+      },
+      {
+        $unwind: {
+          path: "$departmentId",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $addFields: {
+          departmentId: {
+            _id: "$departmentId._id",
+            name: "$departmentId.name",
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "hiringpipelines",
+          localField: "hiringPipelineId",
+          foreignField: "_id",
+          as: "hiringPipelineId",
+        },
+      },
+      {
+        $unwind: {
+          path: "$hiringPipelineId",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "hiringPipelineId.createdById",
+          foreignField: "_id",
+          as: "hiringPipelineId.createdById",
+        },
+      },
+      {
+        $unwind: {
+          path: "$hiringPipelineId.createdById",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $addFields: {
+          "hiringPipelineId.createdById": {
+            _id: "$hiringPipelineId.createdById._id",
+            name: "$hiringPipelineId.createdById.name",
+            email: "$hiringPipelineId.createdById.email",
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "jobskills",
+          localField: "_id",
+          foreignField: "jobId",
+          as: "requiredSkills",
+        },
+      },
+      {
+        $addFields: {
+          requiredSkills: {
+            $map: {
+              input: "$requiredSkills",
+              as: "skill",
+              in: "$$skill.skill",
+            },
+          },
+        },
+      },
+    ]).exec();
+
+    if (!jobs.length) {
       return NextResponse.json(
-        { success: false, error: "Job Role not found" },
+        { success: false, error: "Job not found or unauthorized" },
         { status: 404 }
       );
     }
@@ -177,8 +282,8 @@ export async function GET(
     return NextResponse.json(
       {
         success: true,
-        data: jobRole,
-        message: "Job Role fetched successfully",
+        data: jobs[0],
+        message: "Job fetched successfully",
       },
       { status: 200 }
     );
@@ -187,7 +292,7 @@ export async function GET(
   }
 }
 
-// ---- DELETE Job Role by ID ----
+// ---- DELETE Job by ID ----
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -195,25 +300,32 @@ export async function DELETE(
   try {
     await connectToDatabase();
     const { id } = await params;
+    const userId = await verifyAuth(req);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
-        { success: false, error: "Invalid Job Role ID" },
+        { success: false, error: "Invalid Job ID" },
         { status: 400 }
       );
     }
 
-    const deleted =
-      await JobRoleModel.findByIdAndDelete(id).lean<LeanJobRole>();
+    const deleted = await Job.findOneAndDelete({
+      _id: id,
+      hiringManagerId: new mongoose.Types.ObjectId(userId),
+    }).lean();
+
     if (!deleted) {
       return NextResponse.json(
-        { success: false, error: "Job Role not found" },
+        { success: false, error: "Job not found or unauthorized" },
         { status: 404 }
       );
     }
 
+    // Delete associated JobSkill documents
+    await JobSkill.deleteMany({ jobId: id });
+
     return NextResponse.json(
-      { success: true, message: "Job Role deleted successfully" },
+      { success: true, message: "Job deleted successfully" },
       { status: 200 }
     );
   } catch (error) {
@@ -221,24 +333,25 @@ export async function DELETE(
   }
 }
 
-// ---- PATCH Job Role by ID ----
+// ---- PATCH Job by ID ----
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-): Promise<NextResponse<ApiResponse<LeanJobRole>>> {
+): Promise<NextResponse<ApiResponse<LeanJob>>> {
   try {
     await connectToDatabase();
     const { id } = await params;
+    const userId = await verifyAuth(req);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
-        { success: false, error: "Invalid Job Role ID" },
+        { success: false, error: "Invalid Job ID" },
         { status: 400 }
       );
     }
 
     const body = await req.json();
-    const validation = JobRoleUpdateSchema.safeParse(body);
+    const validation = JobUpdateSchema.safeParse(body);
 
     if (!validation.success) {
       return NextResponse.json(
@@ -251,76 +364,179 @@ export async function PATCH(
       );
     }
 
-    const updatePayload: UpdatePayload = {};
-
     const {
-      positionTitle,
-      postingDate,
-      requiredSkills,
-      jobDescription,
-      pay,
+      title,
       workType,
-      minQualification,
-      addedQualifications,
-      qualificationDescription,
+      workLocation,
+      contract,
+      headCount,
+      minimumSalary,
+      maximumSalary,
+      jobDescription,
       status,
-      hiringProcessStages,
+      requiredSkills,
+      departmentId,
+      hiringPipelineId,
+      hiringManagerId,
     } = validation.data;
 
-    if (positionTitle) updatePayload.positionTitle = positionTitle;
-    if (postingDate) updatePayload.postingDate = toDate(postingDate);
-    if (requiredSkills) updatePayload.requiredSkills = requiredSkills;
-    if (jobDescription) updatePayload.jobDescription = jobDescription;
+    const updatePayload: UpdatePayload = {};
+
+    if (title) updatePayload.title = title;
+    if (workType) updatePayload.workType = workType as WorkType;
+    if (workLocation) updatePayload.workLocation = workLocation;
+    if (contract) updatePayload.contract = contract as ContractType;
+    if (headCount) updatePayload.headCount = headCount;
+    if (minimumSalary !== undefined)
+      updatePayload.minimumSalary = minimumSalary;
+    if (maximumSalary !== undefined)
+      updatePayload.maximumSalary = maximumSalary;
+    if (jobDescription !== undefined)
+      updatePayload.jobDescription = jobDescription;
     if (status) updatePayload.status = status;
-    if (pay) updatePayload.pay = pay;
-    if (workType) updatePayload.workType = workType;
-    if (hiringProcessStages) {
-      updatePayload.hiringProcessStages = hiringProcessStages.map((stage) => ({
-        ...stage,
-        scheduledDate: toDate(stage.scheduledDate),
-        appearedCandidates: stage.appearedCandidates?.map(
-          (id) => new mongoose.Types.ObjectId(id)
-        ),
-        disqualifiedCandidates: stage.disqualifiedCandidates?.map(
-          (id) => new mongoose.Types.ObjectId(id)
-        ),
-        qualifiedCandidates: stage.qualifiedCandidates?.map(
-          (id) => new mongoose.Types.ObjectId(id)
-        ),
-      }));
+    if (departmentId)
+      updatePayload.departmentId = new mongoose.Types.ObjectId(departmentId);
+    if (hiringPipelineId)
+      updatePayload.hiringPipelineId = new mongoose.Types.ObjectId(
+        hiringPipelineId
+      );
+    if (hiringManagerId)
+      updatePayload.hiringManagerId = new mongoose.Types.ObjectId(
+        hiringManagerId
+      );
+
+    // Validate references if updating
+    if (hiringManagerId) {
+      const user = await User.findById(hiringManagerId);
+      if (!user) throw new Error("Invalid hiring manager ID");
+    }
+    if (departmentId) {
+      const dept = await Department.findById(departmentId);
+      if (!dept) throw new Error("Invalid department ID");
+    }
+    if (hiringPipelineId) {
+      const pipeline = await HiringPipeline.findById(hiringPipelineId);
+      if (!pipeline) throw new Error("Invalid pipeline ID");
+      if (pipeline.createdById.toString() !== (hiringManagerId || userId)) {
+        throw new Error(
+          "Pipeline does not belong to the specified hiring manager"
+        );
+      }
     }
 
-    if (minQualification || addedQualifications || qualificationDescription) {
-      updatePayload.academicQualifications = {};
-      if (minQualification)
-        updatePayload.academicQualifications.minQualification =
-          minQualification;
-      if (addedQualifications)
-        updatePayload.academicQualifications.addedQualifications =
-          addedQualifications;
-      if (qualificationDescription)
-        updatePayload.academicQualifications.description =
-          qualificationDescription;
-    }
-
-    const updatedJobRole = await JobRoleModel.findByIdAndUpdate(
-      id,
+    const updatedJob = await Job.findOneAndUpdate(
+      { _id: id, hiringManagerId: new mongoose.Types.ObjectId(userId) },
       { $set: updatePayload },
       { new: true, runValidators: true }
-    ).lean<LeanJobRole>();
+    ).lean();
 
-    if (!updatedJobRole) {
+    if (!updatedJob) {
       return NextResponse.json(
-        { success: false, error: "Job Role not found" },
+        { success: false, error: "Job not found or unauthorized" },
         { status: 404 }
       );
     }
 
+    // Update JobSkill documents
+    if (requiredSkills) {
+      await JobSkill.deleteMany({ jobId: id });
+      const skills = requiredSkills.map((skill) => ({
+        jobId: id,
+        skill,
+      }));
+      if (skills.length) {
+        await JobSkill.insertMany(skills);
+      }
+    }
+
+    // Fetch updated job with aggregation for consistent response
+    const [jobWithDetails] = await Job.aggregate([
+      { $match: { _id: new mongoose.Types.ObjectId(id) } },
+      {
+        $lookup: {
+          from: "departments",
+          localField: "departmentId",
+          foreignField: "_id",
+          as: "departmentId",
+        },
+      },
+      {
+        $unwind: {
+          path: "$departmentId",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $addFields: {
+          departmentId: {
+            _id: "$departmentId._id",
+            name: "$departmentId.name",
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "hiringpipelines",
+          localField: "hiringPipelineId",
+          foreignField: "_id",
+          as: "hiringPipelineId",
+        },
+      },
+      {
+        $unwind: {
+          path: "$hiringPipelineId",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "hiringPipelineId.createdById",
+          foreignField: "_id",
+          as: "hiringPipelineId.createdById",
+        },
+      },
+      {
+        $unwind: {
+          path: "$hiringPipelineId.createdById",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $addFields: {
+          "hiringPipelineId.createdById": {
+            _id: "$hiringPipelineId.createdById._id",
+            name: "$hiringPipelineId.createdById.name",
+            email: "$hiringPipelineId.createdById.email",
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "jobskills",
+          localField: "_id",
+          foreignField: "jobId",
+          as: "requiredSkills",
+        },
+      },
+      {
+        $addFields: {
+          requiredSkills: {
+            $map: {
+              input: "$requiredSkills",
+              as: "skill",
+              in: "$$skill.skill",
+            },
+          },
+        },
+      },
+    ]).exec();
+
     return NextResponse.json(
       {
         success: true,
-        message: "Job Role updated successfully",
-        data: updatedJobRole,
+        message: "Job updated successfully",
+        data: jobWithDetails,
       },
       { status: 200 }
     );
