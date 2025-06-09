@@ -1,16 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import mongoose from "mongoose";
-import {
-  Department,
-  Permission,
-  RolePermission,
-  User,
-  ActivityLog,
-  Action,
-  TargetType,
-  Job,
-} from "@/db/models"; // Adjust path based on your project structure
+import { Department, Permission, RolePermission, User, Job } from "@/db/models"; // Adjust path based on your project structure
 import { auth } from "@/auth";
 import { connectToDatabase } from "@/db/connection/dbConnect";
 
@@ -123,16 +114,6 @@ export async function GET(
           localField: "_id",
           foreignField: "departmentId",
           as: "jobs",
-          pipeline: [
-            {
-              $project: {
-                title: 1,
-                description: 1,
-                isCritical: 1,
-                maxOpenings: 1,
-              },
-            },
-          ],
         },
       },
       {
@@ -150,14 +131,6 @@ export async function GET(
     }
 
     // Log activity
-    await ActivityLog.create({
-      actorId: user.id,
-      action: Action.View,
-      targetType: TargetType.Department,
-      targetId: department[0]._id,
-      details: `Viewed department: ${department[0].name}`,
-      timestamp: new Date(),
-    });
 
     return NextResponse.json(department[0], { status: 200 });
   } catch (error: any) {
@@ -247,17 +220,6 @@ export async function PUT(
       );
       for (const job of jobsToDelete) {
         await Job.deleteOne({ _id: job._id }).session(session);
-        await ActivityLog.create(
-          {
-            actorId: user.id,
-            action: Action.Delete,
-            targetType: TargetType.Job,
-            targetId: job._id,
-            details: `Deleted job: ${job.title} from department: ${department.name}`,
-            timestamp: new Date(),
-          },
-          { session }
-        );
       }
 
       // Create or update jobs
@@ -272,17 +234,6 @@ export async function PUT(
             job.isCritical = jobData.isCritical;
           if (jobData.maxOpenings) job.maxOpenings = jobData.maxOpenings;
           await job.save();
-          await ActivityLog.create(
-            {
-              actorId: user.id,
-              action: Action.Update,
-              targetType: TargetType.Job,
-              targetId: job._id,
-              details: `Updated job: ${job.title} in department: ${department.name}`,
-              timestamp: new Date(),
-            },
-            { session }
-          );
         } else {
           // Create new job
           const newJob = new Job({
@@ -290,35 +241,11 @@ export async function PUT(
             departmentId: deptId,
           });
           await newJob.save({ session });
-          await ActivityLog.create(
-            {
-              actorId: user.id,
-              action: Action.Create,
-              targetType: TargetType.Job,
-              targetId: newJob._id,
-              details: `Created job: ${newJob.title} in department: ${department.name}`,
-              timestamp: new Date(),
-            },
-            { session }
-          );
         }
       }
     }
 
     await department.save();
-
-    // Log department update activity
-    await ActivityLog.create(
-      {
-        actorId: user.id,
-        action: Action.Update,
-        targetType: TargetType.Department,
-        targetId: department._id,
-        details: `Updated department: ${department.name}`,
-        timestamp: new Date(),
-      },
-      { session }
-    );
 
     await session.commitTransaction();
     return NextResponse.json(department, { status: 200 });
@@ -384,33 +311,11 @@ export async function DELETE(
     const jobs = await Job.find({ departmentId: deptId }).session(session);
     for (const job of jobs) {
       await Job.deleteOne({ _id: job._id }).session(session);
-      await ActivityLog.create(
-        {
-          actorId: user.id,
-          action: Action.Delete,
-          targetType: TargetType.Job,
-          targetId: job._id,
-          details: `Deleted job: ${job.title} from department: ${department.name}`,
-          timestamp: new Date(),
-        },
-        { session }
-      );
     }
 
     await department.deleteOne();
 
     // Log department deletion activity
-    await ActivityLog.create(
-      {
-        actorId: user.id,
-        action: Action.Delete,
-        targetType: TargetType.Department,
-        targetId: department._id,
-        details: `Deleted department: ${department.name}`,
-        timestamp: new Date(),
-      },
-      { session }
-    );
 
     await session.commitTransaction();
     return NextResponse.json(

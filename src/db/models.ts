@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document, Types, model, models } from "mongoose";
 import bcrypt from "bcrypt-edge";
+
 // Centralized Enums
 export enum RoleName {
   Admin = "admin",
@@ -88,28 +89,6 @@ export enum JobStatus {
   Open = "open",
   Closed = "closed",
   Cancelled = "cancelled",
-}
-
-export enum Action {
-  Create = "create",
-  Update = "update",
-  Delete = "delete",
-  View = "view",
-  Assign = "assign",
-}
-
-export enum TargetType {
-  User = "user",
-  Candidate = "candidate",
-  Job = "job",
-  Stage = "stage",
-  Interview = "interview",
-  Checklist = "checklist",
-  Note = "note",
-  Attachment = "attachment",
-  Team = "team",
-  Department = "department",
-  HiringPipeline = "hiringPipeline",
 }
 
 export enum NoteType {
@@ -532,7 +511,6 @@ JobSchema.index({ departmentId: 1 });
 JobSchema.index({ hiringManagerId: 1 });
 JobSchema.index({ hiringPipelineId: 1 });
 JobSchema.index({ _id: -1 });
-// JobSchema.index({ title: "text", jobDescription: "text" });
 
 /**
  * Validates that departmentId, hiringManagerId, and hiringPipelineId exist before saving.
@@ -575,17 +553,6 @@ JobSchema.pre(
     }
   }
 );
-
-JobSchema.post("save", async function (doc: Document & IJob) {
-  await ActivityLog.create({
-    actorId: doc.hiringManagerId,
-    action: Action.Create,
-    targetType: TargetType.Job,
-    targetId: doc._id,
-    details: `Created job: ${doc.title}`,
-    timestamp: new Date(),
-  });
-});
 
 // Job Skills Schema
 interface IJobSkill extends Document, Timestamps {
@@ -1138,7 +1105,7 @@ InterviewParticipantSchema.pre("save", async function (next) {
 });
 
 /**
- * No cascading deletes needed for interview participants.
+�� * No cascading deletes needed for interview participants.
  */
 InterviewParticipantSchema.pre(
   "deleteOne",
@@ -1321,7 +1288,6 @@ interface IAttachment extends Document, Timestamps {
   candidateId: Types.ObjectId;
   fileName: string;
   fileUrl: string;
-  uploadedById: Types.ObjectId;
   uploadedAt: Date;
 }
 
@@ -1337,7 +1303,6 @@ const AttachmentSchema = new Schema<IAttachment>(
     },
     fileName: { type: String, required: true },
     fileUrl: { type: String, required: true },
-    uploadedById: { type: Schema.Types.ObjectId, ref: "User", required: true },
     uploadedAt: { type: Date, required: true },
   },
   { timestamps: true }
@@ -1351,82 +1316,9 @@ AttachmentSchema.index({ candidateId: 1, uploadedAt: 1 });
 AttachmentSchema.pre("save", async function (next) {
   try {
     const attachment = this as Document & IAttachment;
-    const [candidate, user] = await Promise.all([
-      Candidate.findById(attachment.candidateId),
-      User.findById(attachment.uploadedById),
-    ]);
+    const candidate = await Candidate.findById(attachment.candidateId);
     if (!candidate) throw new Error("Invalid candidateId");
-    if (!user) throw new Error("Invalid uploadedById");
-    next();
-  } catch (error: unknown) {
-    next(error instanceof Error ? error : new Error("Unknown error occurred"));
-  }
-});
 
-// Activity Logs Schema
-interface IActivityLog extends Document, Timestamps {
-  actorId: Types.ObjectId;
-  action: Action;
-  targetType: TargetType;
-  targetId: Types.ObjectId;
-  details?: string;
-  timestamp: Date;
-}
-
-/**
- * Schema for activity logs with dynamic reference to target documents and TTL index.
- */
-const ActivityLogSchema = new Schema<IActivityLog>(
-  {
-    actorId: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    action: { type: String, enum: Object.values(Action), required: true },
-    targetType: {
-      type: String,
-      enum: Object.values(TargetType),
-      required: true,
-    },
-    targetId: {
-      type: Schema.Types.ObjectId,
-      refPath: "targetType",
-      required: true,
-    },
-    details: { type: String, default: undefined },
-    timestamp: { type: Date, required: true },
-  },
-  { timestamps: true }
-);
-
-ActivityLogSchema.index({ actorId: 1, targetType: 1, timestamp: 1 });
-ActivityLogSchema.index({ targetType: 1, targetId: 1 });
-ActivityLogSchema.index({ timestamp: 1 }, { expireAfterSeconds: 31536000 }); // 1-year retention
-
-/**
- * Validates that actorId and targetId exist for the given targetType before saving.
- */
-ActivityLogSchema.pre("save", async function (next) {
-  try {
-    const log = this as Document & IActivityLog;
-    const modelMap: { [key in TargetType]?: any } = {
-      [TargetType.User]: User,
-      [TargetType.Candidate]: Candidate,
-      [TargetType.Job]: Job,
-      [TargetType.Stage]: HiringStage,
-      [TargetType.Interview]: Interview,
-      [TargetType.Checklist]: Checklist,
-      [TargetType.Note]: Note,
-      [TargetType.Attachment]: Attachment,
-      [TargetType.Team]: Team,
-      [TargetType.Department]: Department,
-    };
-    const model = modelMap[log.targetType];
-    const [actor, target] = await Promise.all([
-      User.findById(log.actorId),
-      model ? model.findById(log.targetId) : null,
-    ]);
-    if (!actor) throw new Error("Invalid actorId");
-    if (!model) throw new Error(`Invalid targetType ${log.targetType}`);
-    if (!target)
-      throw new Error(`Invalid targetId for targetType ${log.targetType}`);
     next();
   } catch (error: unknown) {
     next(error instanceof Error ? error : new Error("Unknown error occurred"));
@@ -1483,5 +1375,3 @@ export const Checklist =
 export const Note = models.Note || model<INote>("Note", NoteSchema);
 export const Attachment =
   models.Attachment || model<IAttachment>("Attachment", AttachmentSchema);
-export const ActivityLog =
-  models.ActivityLog || model<IActivityLog>("ActivityLog", ActivityLogSchema);
